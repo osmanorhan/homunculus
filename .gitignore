@@ -1,0 +1,9 @@
+**/node_modules
+packages/**/dist
+examples/**/node_modules
+examples/**/dist
+AGENTS.md
+CLAUDE.md
+.claude
+*.log
+.DS_Store

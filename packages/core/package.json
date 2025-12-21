@@ -1,0 +1,31 @@
+{
+  "name": "@homunculus/core",
+  "version": "0.0.1",
+  "description": "Biological agent framework core primitives.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/osmanorhanhomunculus.git",
+    "directory": "packages/core"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc --build --clean",
+    "lint": "echo \"lint not yet configured\"",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@homunculus/semantic-engine": "workspace:*"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

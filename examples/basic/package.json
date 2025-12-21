@@ -1,0 +1,23 @@
+{
+  "name": "@homunculus-examples/basic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "tui": "tsx src/tui.ts",
+    "dev": "tsx watch src/index.ts",
+    "silent-failure": "tsx src/silent-failure-test.ts"
+  },
+  "dependencies": {
+    "@homunculus/core": "workspace:*",
+    "@homunculus/introspection": "workspace:*",
+    "@homunculus/primitives": "workspace:*",
+    "@homunculus/semantic-engine": "workspace:*",
+    "terminal-kit": "^3.1.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

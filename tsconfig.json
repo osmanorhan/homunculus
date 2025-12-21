@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "moduleDetection": "force",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022"],
+    "types": ["node", "vitest"],
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@homunculus/core": ["packages/core/src/index.ts"],
+      "@homunculus/semantic-engine": ["packages/semantic-engine/src/index.ts"],
+      "@homunculus/primitives": ["packages/primitives/src/index.ts"],
+      "@homunculus/introspection": ["packages/introspection/src/index.ts"],
+    }
+  },
+  "include": [],
+  "references": []
+}
