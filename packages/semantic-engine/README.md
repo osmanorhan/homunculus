@@ -44,4 +44,4 @@ const distance = await calculateSemanticDistance(emitter, receptor, llm, {
 
 ## Notes
 - ESM only, TypeScript declarations included.
-- OpenAI-compatible endpoints (OpenAI, Anthropic-compatible, local) via `baseURL`.
+- OpenAI api compatible endpoints

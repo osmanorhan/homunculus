@@ -22,7 +22,7 @@ import { LLMClient } from '@homunculus/semantic-engine';
 const llm = new LLMClient({
   baseURL: process.env.LLM_BASE_URL ?? '',
   apiKey: process.env.LLM_API_KEY ?? '',
-  model: process.env.LLM_MODEL ?? 'gpt-4o-mini',
+  model: process.env.LLM_MODEL ?? '',
 });
 
 const planner = createSignalSocietyPlanner({
@@ -50,7 +50,7 @@ import { LLMClient } from '@homunculus/semantic-engine';
 const llm = new LLMClient({
   baseURL: process.env.LLM_BASE_URL ?? '',
   apiKey: process.env.LLM_API_KEY ?? '',
-  model: process.env.LLM_MODEL ?? 'gpt-4o-mini',
+  model: process.env.LLM_MODEL ?? '',
 });
 
 const birth = (agent: ReturnType<typeof defineOrganicAgent>) => {

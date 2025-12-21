@@ -10,7 +10,10 @@ Signal-based agent framework where agents communicate via natural language thoug
 
 ## Architecture
 
-Agents emit natural language thoughts → Biosphere routes via semantic similarity → Agents perceive and respond → System spawns helpers when stuck
+Agents emit natural language thoughts
+Biosphere routes via semantic similarity
+Agents perceive and respond
+System spawns helpers when stuck
 
 ```typescript
 const biosphere = new Biosphere({
