@@ -11,6 +11,7 @@
 
 import type { Signal, ReceptorField } from './signal.js';
 import { cosineSimilarity } from './semantic-utils.js';
+import type { MotorSkill } from '../skills/motor-skill.js';
 
 /**
  * OrganicAgent: The natural thinking primitive.
@@ -89,6 +90,14 @@ export interface OrganicAgent {
    * Useful for debugging - see what the agent has perceived.
    */
   getContext?(): string[];
+
+  /**
+   * Motor skills (effectors) this agent can use to touch the world.
+   *
+   * Skills are deterministic tools; they do not think.
+   * The agent is the organism; skills are organs.
+   */
+  motorSkills: MotorSkill[];
 }
 
 /**
@@ -105,6 +114,7 @@ export interface OrganicAgentConfig {
   name: string;
   receptorField: ReceptorField;
   systemPrompt: string;
+  motorSkills?: MotorSkill[];
   llm: {
     chat(messages: Array<{ role: string; content: string }>): Promise<string>;
   };
@@ -115,11 +125,13 @@ export function defineOrganicAgent(config: OrganicAgentConfig): OrganicAgent {
   const context: string[] = [];
   let lastEmitContextLength = 0;
   let lastPerceivedSignal: Signal | undefined;
+  const motorSkills = config.motorSkills ?? [];
 
   return {
     id: config.id,
     name: config.name,
     receptorField: config.receptorField,
+    motorSkills,
 
     async perceive(signal: Signal): Promise<void> {
       // Inject signal into context
@@ -201,6 +213,7 @@ export function defineMetaObserver(config: {
     chat(messages: Array<{ role: string; content: string }>): Promise<string>;
     embed(text: string): Promise<number[]>;
   };
+  shouldConsiderSignal?: (signal: Signal) => boolean;
 }): OrganicAgent {
   const distressSignals: Signal[] = [];
   const lastProcessedVector: number[] = [];
@@ -208,6 +221,7 @@ export function defineMetaObserver(config: {
   return {
     id: 'meta-observer',
     name: 'MetaObserver',
+    motorSkills: [],
 
     receptorField: {
       patterns: [
@@ -225,6 +239,9 @@ export function defineMetaObserver(config: {
     },
 
     async perceive(signal: Signal): Promise<void> {
+      if (signal.emittedBy === 'meta-observer') return;
+      if (config.shouldConsiderSignal && !config.shouldConsiderSignal(signal)) return;
+
       // Signal decay: Ignore if we just processed something very similar
       if (lastProcessedVector.length > 0) {
         const similarity = cosineSimilarity(signal.pheromone, lastProcessedVector);

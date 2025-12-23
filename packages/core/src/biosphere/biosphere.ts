@@ -14,13 +14,33 @@
  */
 
 import type { Signal } from '../signal/signal.js';
-import { defineMetaObserver, type OrganicAgent } from '../signal/organic-agent.js';
+import { defineMetaObserver, defineOrganicAgent, type OrganicAgent } from '../signal/organic-agent.js';
 import { createSignal, resonates } from '../signal/signal.js';
 import { cosineSimilarity } from '../signal/semantic-utils.js';
 import { createSignalSynapse, type SignalSynapse } from '../synapse/signal-synapse.js';
+import type { BiosphereEnvironment, EnvironmentSignal } from './environment.js';
 export interface OrganicSpawner {
   seedFromGoal?(goal: string, existingAgents?: OrganicAgent[]): Promise<OrganicAgent[]>;
   spawnHelperForDistress(distressSignal: Signal, existingAgents?: OrganicAgent[]): Promise<OrganicAgent | null>;
+  spawnBridgeAgent?(
+    spec: BridgeAgentSpec,
+    context: { signal: Signal; source: OrganicAgent; target: OrganicAgent; existingAgents: OrganicAgent[] },
+  ): Promise<OrganicAgent | null>;
+}
+
+export interface BridgeAgentSpec {
+  id: string;
+  name: string;
+  receptor_patterns: string[];
+  threshold?: number;
+  voice?: string;
+}
+
+export interface MetaObserverConfig {
+  /**
+   * Optional filter to decide whether a signal should be considered for distress.
+   */
+  shouldConsiderSignal?: (signal: Signal) => boolean;
 }
 
 export interface BiosphereConfig {
@@ -56,6 +76,16 @@ export interface BiosphereConfig {
    * Automatically birth a MetaObserver for distress detection
    */
   autoMetaObserver?: boolean;
+
+  /**
+   * Optional MetaObserver configuration (filters, etc.)
+   */
+  metaObserver?: MetaObserverConfig;
+
+  /**
+   * Optional environment that can emit reality feedback each tick.
+   */
+  environment?: BiosphereEnvironment;
 
   /**
    * Enable equilibrium detection (Minsky's Difference Engine)
@@ -109,6 +139,7 @@ export class Biosphere {
   private readonly observer?: BiosphereObserver;
   private readonly maxTicks: number;
   private readonly tickDelay: number;
+  private readonly environment?: BiosphereEnvironment;
   private readonly equilibriumConfig?: BiosphereConfig['equilibriumDetection'];
   private readonly birthQueue: Promise<void>[] = [];
   private seeded = false;
@@ -120,10 +151,11 @@ export class Biosphere {
     this.observer = config.observer;
     this.maxTicks = config.maxTicks ?? Number.POSITIVE_INFINITY;
     this.tickDelay = config.tickDelay ?? 0;
+    this.environment = config.environment;
     this.equilibriumConfig = config.equilibriumDetection;
 
     if (config.autoMetaObserver !== false) {
-      const meta = defineMetaObserver({ llm: this.llm });
+      const meta = defineMetaObserver({ llm: this.llm, shouldConsiderSignal: config.metaObserver?.shouldConsiderSignal });
       this.birthQueue.push(this.birth(meta));
     }
   }
@@ -158,6 +190,11 @@ export class Biosphere {
 
     while (this.tick < this.maxTicks) {
       console.log(`\n=== Tick ${this.tick} - ${this.agents.size} agents ===`);
+
+      // Let environment emit reality feedback before agents speak
+      if (this.environment) {
+        await this.emitEnvironmentSignals();
+      }
 
       // Let all agents emit their thoughts (in parallel for speed)
       const emitPromises: Promise<void>[] = [];
@@ -264,6 +301,62 @@ export class Biosphere {
     // 5. Propagate to receivers with adaptive coupling
     for (const receiver of receivers) {
       await this.propagateToReceiver(signal, source, receiver);
+    }
+  }
+
+  /**
+   * Emit signals produced by the environment (reality feedback).
+   */
+  private async emitEnvironmentSignals(): Promise<void> {
+    const state = this.getState();
+    let signals: EnvironmentSignal[] = [];
+
+    try {
+      signals = await this.environment!.tick(state);
+    } catch (error) {
+      console.error('Environment tick failed:', error);
+      return;
+    }
+
+    for (const signal of signals) {
+      await this.ingestEnvironmentSignal(signal);
+    }
+  }
+
+  /**
+   * Ingest an environment signal without synaptic coupling or bridging.
+   */
+  private async ingestEnvironmentSignal(signalInput: EnvironmentSignal): Promise<void> {
+    const thought = signalInput.thought.trim();
+    if (!thought) return;
+
+    await this.flushBirthQueue();
+
+    const pheromone = await this.llm.embed(thought);
+    const signal: Signal = {
+      ...createSignal({
+        thought,
+        emittedBy: signalInput.emittedBy ?? 'environment',
+        inferredIntent: signalInput.inferredIntent,
+        inferredTags: signalInput.inferredTags,
+      }),
+      pheromone,
+    };
+
+    this.signalHistory.push(signal);
+    this.observer?.onSignalEmitted?.(signal, this.tick);
+
+    const isSpawnIntent = await this.detectSpawnIntent(thought);
+    if (isSpawnIntent) {
+      await this.handleSpawnRequest(signal);
+      return;
+    }
+
+    const receivers = await this.findResonance(signal);
+    this.observer?.onSignalRouted?.(signal, receivers, this.tick);
+
+    for (const receiver of receivers) {
+      await receiver.perceive(signal);
     }
   }
 
@@ -674,7 +767,7 @@ export class Biosphere {
     // Parse bridge spec
     try {
       const extracted = bridgeSpec.match(/```json\s*([\s\S]*?)\s*```/i)?.[1] || bridgeSpec;
-      const parsed = JSON.parse(extracted) as { agent: any };
+      const parsed = JSON.parse(extracted) as { agent: BridgeAgentSpec };
       const blueprint = parsed.agent;
 
       if (!blueprint?.id || !Array.isArray(blueprint.receptor_patterns)) {
@@ -689,24 +782,45 @@ export class Biosphere {
         return;
       }
 
-      // Create bridge agent
-      const bridge = await this.spawner.spawnHelperForDistress(signal, this.listAgents());
+      const bridge = this.spawner.spawnBridgeAgent
+        ? await this.spawner.spawnBridgeAgent(blueprint, {
+            signal,
+            source,
+            target,
+            existingAgents: this.listAgents(),
+          })
+        : defineOrganicAgent({
+            id: blueprint.id,
+            name: blueprint.name,
+            receptorField: {
+              patterns: blueprint.receptor_patterns,
+              threshold: blueprint.threshold ?? 0.5,
+            },
+            systemPrompt:
+              blueprint.voice ??
+              `You are ${blueprint.name}. You translate between ${source.name} and ${target.name} without losing meaning.`,
+            llm: this.llm,
+          });
+
       if (!bridge) {
         console.warn('Spawner failed to create bridge agent');
         return;
       }
 
+      // Avoid duplicate ids
+      if (this.agents.has(bridge.id)) {
+        console.warn(`Bridge id already exists (${bridge.id}), skipping spawn`);
+        return;
+      }
+
       await this.birth(bridge);
 
-      console.log(`\n Bridge spawned: ${blueprint.name}`);
-      console.log(`   Connects: ${source.name} ↔ ${blueprint.name} ↔ ${target.name}`);
+      console.log(`\n Bridge spawned: ${bridge.name}`);
+      console.log(`   Connects: ${source.name} ↔ ${bridge.name} ↔ ${target.name}`);
       console.log(`   Cascade: Two synapses instead of one impossible synapse\n`);
 
       // Inject signal into bridge (it will naturally propagate to target)
-      const bridgeAgent = this.agents.get(blueprint.id);
-      if (bridgeAgent) {
-        await bridgeAgent.perceive(signal);
-      }
+      await bridge.perceive(signal);
     } catch (error) {
       console.error('Failed to spawn bridge agent:', error);
     }

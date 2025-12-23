@@ -7,7 +7,7 @@
     "start": "tsx src/index.ts",
     "tui": "tsx src/tui.ts",
     "dev": "tsx watch src/index.ts",
-    "silent-failure": "tsx src/silent-failure-test.ts"
+    "frame-demo": "tsx src/frame-demo.ts"
   },
   "dependencies": {
     "@homunculus/core": "workspace:*",
