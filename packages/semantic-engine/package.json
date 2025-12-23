@@ -1,5 +1,5 @@
 {
-  "name": "@homunculus/semantic-engine",
+  "name": "@homunculus-live/semantic-engine",
   "version": "0.0.1",
   "description": "Semantic matching and LLM glue for homunculus.",
   "type": "module",
@@ -20,7 +20,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
-    "@homunculus/core": "workspace:*"
+    "@homunculus-live/core": "workspace:*"
   },
   "engines": {
     "node": ">=18"

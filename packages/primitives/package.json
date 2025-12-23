@@ -1,5 +1,5 @@
 {
-  "name": "@homunculus/primitives",
+  "name": "@homunculus-live/primitives",
   "version": "0.0.1",
   "description": "Built-in primitive agents for homunculus (vision, memory, reasoning, action).",
   "type": "module",
@@ -20,8 +20,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@homunculus/core": "workspace:*",
-    "@homunculus/semantic-engine": "workspace:*"
+    "@homunculus-live/core": "workspace:*",
+    "@homunculus-live/semantic-engine": "workspace:*"
   },
   "engines": {
     "node": ">=18"

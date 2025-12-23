@@ -1,5 +1,5 @@
 {
-  "name": "@homunculus/core",
+  "name": "@homunculus-live/core",
   "version": "0.0.1",
   "description": "Biological agent framework core primitives.",
   "type": "module",
@@ -20,7 +20,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@homunculus/semantic-engine": "workspace:*"
+    "@homunculus-live/semantic-engine": "workspace:*"
   },
   "engines": {
     "node": ">=18"
