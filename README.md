@@ -37,10 +37,10 @@ for await (const state of biosphere.live()) {
 
 ## Packages
 
-- `@homunculus/core` - Signal (natural language thoughts), OrganicAgent, Biosphere, SignalSynapse, GenerativeSpawner
-- `@homunculus/semantic-engine` - LLM client (chat/embed)
-- `@homunculus/primitives` - SignalIntentAnalyzer
-- `@homunculus/introspection` - Signal society planning
+- `@homunculus-live/core` - Signal (natural language thoughts), OrganicAgent, Biosphere, SignalSynapse, GenerativeSpawner
+- `@homunculus-live/semantic-engine` - LLM client (chat/embed)
+- `@homunculus-live/primitives` - SignalIntentAnalyzer
+- `@homunculus-live/introspection` - Signal society planning
 
 ## Quick Start
 

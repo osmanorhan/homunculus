@@ -1,4 +1,4 @@
-# @homunculus/introspection
+# @homunculus-live/introspection
 
 Phase 3 utilities for planning agent societies and detecting when a society has reached equilibrium. This package currently focuses on signal-based planning and a goal-satisfaction detector inspired by Minsky's difference engine.
 
@@ -16,8 +16,8 @@ Phase 3 utilities for planning agent societies and detecting when a society has 
 
 ### Plan a signal society
 ```ts
-import { createSignalSocietyPlanner } from '@homunculus/introspection';
-import { LLMClient } from '@homunculus/semantic-engine';
+import { createSignalSocietyPlanner } from '@homunculus-live/introspection';
+import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const llm = new LLMClient({
   baseURL: process.env.LLM_BASE_URL ?? '',
@@ -43,9 +43,9 @@ for await (const planSignal of planner.emit({
 
 ### Spawn agents from a plan
 ```ts
-import { createSignalAgentFactory } from '@homunculus/introspection';
-import { defineOrganicAgent } from '@homunculus/core';
-import { LLMClient } from '@homunculus/semantic-engine';
+import { createSignalAgentFactory } from '@homunculus-live/introspection';
+import { defineOrganicAgent } from '@homunculus-live/core';
+import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const llm = new LLMClient({
   baseURL: process.env.LLM_BASE_URL ?? '',
@@ -84,7 +84,7 @@ for await (const resultSignal of factory.emit({
 
 ### Detect equilibrium
 ```ts
-import { EquilibriumDetector } from '@homunculus/introspection';
+import { EquilibriumDetector } from '@homunculus-live/introspection';
 
 const detector = new EquilibriumDetector({
   llm: {

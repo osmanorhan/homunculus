@@ -1,16 +1,16 @@
-# @homunculus/core
+# @homunculus-live/core
 
 Core primitives for the homunculus biological agent framework: organic agents, signals, synapses, and the biosphere router.
 
 ## Install
 ```bash
-pnpm add @homunculus/core
+pnpm add @homunculus-live/core
 ```
 
 ## Quick start
 ```ts
-import { Biosphere, defineOrganicAgent } from '@homunculus/core';
-import { LLMClient } from '@homunculus/semantic-engine';
+import { Biosphere, defineOrganicAgent } from '@homunculus-live/core';
+import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const llm = new LLMClient({
   baseURL: process.env.LLM_BASE_URL!,
@@ -70,4 +70,4 @@ for await (const state of biosphere.live()) {
 
 ## Notes
 - ESM only; TypeScript declarations included.
-- Pair with `@homunculus/semantic-engine` for embeddings and chat.
+- Pair with `@homunculus-live/semantic-engine` for embeddings and chat.

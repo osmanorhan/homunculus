@@ -6,8 +6,8 @@ import {
   MotorSkillRegistry,
   type MotorSkill,
   type SkillPolicy,
-} from '@homunculus/core';
-import { LLMClient } from '@homunculus/semantic-engine';
+} from '@homunculus-live/core';
+import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL || 'http://192.168.1.105:11434/v1';
 const LLM_MODEL = process.env.LLM_MODEL || 'qwen3:14b';

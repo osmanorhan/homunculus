@@ -18,10 +18,10 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@homunculus/core": ["packages/core/src/index.ts"],
-      "@homunculus/semantic-engine": ["packages/semantic-engine/src/index.ts"],
-      "@homunculus/primitives": ["packages/primitives/src/index.ts"],
-      "@homunculus/introspection": ["packages/introspection/src/index.ts"],
+      "@homunculus-live/core": ["packages/core/src/index.ts"],
+      "@homunculus-live/semantic-engine": ["packages/semantic-engine/src/index.ts"],
+      "@homunculus-live/primitives": ["packages/primitives/src/index.ts"],
+      "@homunculus-live/introspection": ["packages/introspection/src/index.ts"],
     }
   },
   "include": [],

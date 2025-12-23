@@ -5,7 +5,7 @@ import {
   MotorSkillRegistry,
   defineOrganicAgent,
   type MotorSkill,
-} from '@homunculus/core';
+} from '@homunculus-live/core';
 
 const llm = {
   async chat(_messages: Array<{ role: string; content: string }>) {

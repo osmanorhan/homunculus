@@ -1,7 +1,7 @@
-import { Biosphere, type BiosphereObserver, GenerativeSpawner } from '@homunculus/core';
-import { LLMClient } from '@homunculus/semantic-engine';
-import { createSignalIntentAnalyzer } from '@homunculus/primitives';
-import { createSignalSocietyPlanner, createSignalAgentFactory, EquilibriumDetector } from '@homunculus/introspection';
+import { Biosphere, type BiosphereObserver, GenerativeSpawner } from '@homunculus-live/core';
+import { LLMClient } from '@homunculus-live/semantic-engine';
+import { createSignalIntentAnalyzer } from '@homunculus-live/primitives';
+import { createSignalSocietyPlanner, createSignalAgentFactory, EquilibriumDetector } from '@homunculus-live/introspection';
 import { NeonTui } from './tui-kit.js';
 import { appendFileSync, writeFileSync } from 'fs';
 import { join } from 'path';

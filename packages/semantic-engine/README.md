@@ -1,15 +1,15 @@
-# @homunculus/semantic-engine
+# @homunculus-live/semantic-engine
 
 Provider-agnostic LLM client + semantic distance utilities for homunculus.
 
 ## Install
 ```bash
-pnpm add @homunculus/semantic-engine
+pnpm add @homunculus-live/semantic-engine
 ```
 
 ## LLM Client
 ```ts
-import { LLMClient } from '@homunculus/semantic-engine';
+import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const llm = new LLMClient({
   baseURL: process.env.LLM_BASE_URL!,
@@ -25,8 +25,8 @@ const transformed = await llm.transform('Reformat JSON', { foo: 'bar' });
 
 ## Semantic Distance
 ```ts
-import { calculateSemanticDistance } from '@homunculus/semantic-engine';
-import { createEmitter, createReceptor } from '@homunculus/core';
+import { calculateSemanticDistance } from '@homunculus-live/semantic-engine';
+import { createEmitter, createReceptor } from '@homunculus-live/core';
 
 const emitter = createEmitter({ intent: 'numbers', tags: ['data'] });
 const receptor = createReceptor({ desire: 'numbers', tags: ['data'] });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defineMetaObserver } from '@homunculus/core';
+import { defineMetaObserver } from '@homunculus-live/core';
 
 describe('defineMetaObserver', () => {
   it('respects shouldConsiderSignal filter', async () => {

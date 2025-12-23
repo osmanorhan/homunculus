@@ -10,8 +10,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@homunculus/core': path.resolve(__dirname, '../core/src'),
-      '@homunculus/semantic-engine': path.resolve(__dirname, '../semantic-engine/src'),
+      '@homunculus-live/core': path.resolve(__dirname, '../core/src'),
+      '@homunculus-live/semantic-engine': path.resolve(__dirname, '../semantic-engine/src'),
     },
   },
 });

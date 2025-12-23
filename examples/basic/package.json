@@ -10,10 +10,10 @@
     "frame-demo": "tsx src/frame-demo.ts"
   },
   "dependencies": {
-    "@homunculus/core": "workspace:*",
-    "@homunculus/introspection": "workspace:*",
-    "@homunculus/primitives": "workspace:*",
-    "@homunculus/semantic-engine": "workspace:*",
+    "@homunculus-live/core": "workspace:*",
+    "@homunculus-live/introspection": "workspace:*",
+    "@homunculus-live/primitives": "workspace:*",
+    "@homunculus-live/semantic-engine": "workspace:*",
     "terminal-kit": "^3.1.2"
   },
   "devDependencies": {

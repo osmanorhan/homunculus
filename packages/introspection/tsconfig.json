@@ -10,7 +10,7 @@
     "composite": true,
     "tsBuildInfoFile": "dist/.tsbuildinfo",
     "paths": {
-      "@homunculus/core": ["../core/dist/index.d.ts"]
+      "@homunculus-live/core": ["../core/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*"],

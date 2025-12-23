@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { calculateSemanticDistance } from './distance.js';
 import { LLMError } from '../llm/client.js';
-import { createEmitter, createReceptor } from '@homunculus/core';
+import { createEmitter, createReceptor } from '@homunculus-live/core';
 
 class StubLLM {
   constructor(private readonly embedding: number[]) {}

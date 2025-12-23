@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { MotorSkill, SkillPolicy } from '@homunculus/core';
-import { applySkillPolicy } from '@homunculus/core';
+import type { MotorSkill, SkillPolicy } from '@homunculus-live/core';
+import { applySkillPolicy } from '@homunculus-live/core';
 
 const echoSkill: MotorSkill<string, string> = {
   id: 'echo',

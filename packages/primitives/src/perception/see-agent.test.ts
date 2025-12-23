@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSeeAgent } from './see-agent.js';
-import { createMolecule } from '@homunculus/core';
+import { createMolecule } from '@homunculus-live/core';
 
 describe('createSeeAgent', () => {
   it('emits perception molecules when stimulated', async () => {

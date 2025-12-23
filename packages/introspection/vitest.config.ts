@@ -10,8 +10,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@homunculus/core': path.resolve(__dirname, '../core/src'),
-      '@homunculus/introspection': path.resolve(__dirname, './src'),
+      '@homunculus-live/core': path.resolve(__dirname, '../core/src'),
+      '@homunculus-live/introspection': path.resolve(__dirname, './src'),
     },
   },
 });

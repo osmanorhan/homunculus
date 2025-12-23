@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FrameRegistry, type AgentFrame } from '@homunculus/core';
+import { FrameRegistry, type AgentFrame } from '@homunculus-live/core';
 
 function createToyEmbedder() {
   return async (text: string): Promise<number[]> => {

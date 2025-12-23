@@ -1,4 +1,4 @@
-# @homunculus/primitives
+# @homunculus-live/primitives
 
 Primitive building blocks for homunculus. This package currently ships a single agent: the signal intent analyzer.
 
@@ -9,8 +9,8 @@ Primitive building blocks for homunculus. This package currently ships a single 
 ## Usage
 
 ```ts
-import { createSignalIntentAnalyzer } from '@homunculus/primitives';
-import { LLMClient } from '@homunculus/semantic-engine';
+import { createSignalIntentAnalyzer } from '@homunculus-live/primitives';
+import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const llm = new LLMClient({ baseURL: process.env.LLM_BASE_URL!, apiKey: process.env.LLM_API_KEY!, model: process.env.LLM_MODEL! });
 

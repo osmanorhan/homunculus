@@ -1,5 +1,5 @@
-import { defineOrganicAgent, type OrganicAgent } from '@homunculus/core';
-import type { LLMClient } from '@homunculus/semantic-engine';
+import { defineOrganicAgent, type OrganicAgent } from '@homunculus-live/core';
+import type { LLMClient } from '@homunculus-live/semantic-engine';
 
 export interface SignalIntentAnalysis {
   actionableGoal: string;
