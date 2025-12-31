@@ -3,7 +3,7 @@ import {
   FrameRegistry,
   FrameSpawner,
   MotorSkillRegistry,
-  defineOrganicAgent,
+  defineHomunculusAgent,
   type MotorSkill,
 } from '@homunculus-live/core';
 
@@ -75,7 +75,7 @@ describe('FrameSpawner', () => {
       requiredMotorSkills: ['file-read'],
     });
 
-    const fallbackAgent = defineOrganicAgent({
+    const fallbackAgent = defineHomunculusAgent({
       id: 'fallback',
       name: 'Fallback',
       receptorField: { patterns: ['fallback'] },

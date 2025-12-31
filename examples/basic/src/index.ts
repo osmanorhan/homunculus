@@ -189,7 +189,8 @@ async function main() {
       if (state.equilibrium) {
         const tension = state.equilibrium.goalTension * 100;
         const momentum = state.equilibrium.momentum * 100;
-        chaosLevel = Math.floor((tension + momentum) / 2);
+        const saturation = state.equilibrium.semanticSaturation * 100;
+        chaosLevel = Math.floor((tension + momentum + saturation) / 3);
 
         log(`   Equilibrium state:`);
         log(`     At equilibrium: ${state.equilibrium.atEquilibrium}`);
@@ -197,6 +198,7 @@ async function main() {
         log(`     Momentum: ${(state.equilibrium.momentum * 100).toFixed(0)}%`);
         log(`     Coherence: ${(state.equilibrium.coherence * 100).toFixed(0)}%`);
         log(`     Decision clarity: ${(state.equilibrium.decisionClarity * 100).toFixed(0)}%`);
+        log(`     Semantic saturation: ${(state.equilibrium.semanticSaturation * 100).toFixed(0)}%`);
         log(`     Reasoning: ${state.equilibrium.reasoning}`);
 
         // Display equilibrium metrics
@@ -271,6 +273,7 @@ async function main() {
             `Momentum: ${(finalState.equilibrium.momentum * 100).toFixed(0)}%`,
             `Coherence: ${(finalState.equilibrium.coherence * 100).toFixed(0)}%`,
             `Decision Clarity: ${(finalState.equilibrium.decisionClarity * 100).toFixed(0)}%`,
+            `Semantic Saturation: ${(finalState.equilibrium.semanticSaturation * 100).toFixed(0)}%`,
           ]
         : [],
       recommendations: [],

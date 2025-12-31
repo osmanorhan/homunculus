@@ -1,8 +1,32 @@
 export type ChatMessageRole = 'system' | 'user' | 'assistant' | 'tool';
 
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string; // JSON string
+  };
+}
+
+export interface Tool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters?: {
+      type: 'object';
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
+  };
+}
+
 export interface ChatMessage {
   role: ChatMessageRole;
-  content: string;
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
 }
 
 export interface LLMClientConfig {
@@ -19,7 +43,10 @@ export interface RequestOptions {
 
 interface ChatCompletionResponse {
   choices?: Array<{
-    message?: { content?: string };
+    message?: {
+      content?: string | null;
+      tool_calls?: ToolCall[];
+    };
   }>;
 }
 
@@ -63,25 +90,41 @@ export class LLMClient {
 
   async transform(prompt: string, data: unknown, options: RequestOptions = {}): Promise<unknown> {
     const rendered = `${prompt}\n\nData:\n${typeof data === 'string' ? data : JSON.stringify(data)}`;
-    const content = await this.chat([{ role: 'user', content: rendered }], options);
-    return content;
+    const response = await this.chat([{ role: 'user', content: rendered }], options);
+    return response.content ?? '';
   }
 
-  async chat(messages: ChatMessage[], options: RequestOptions = {}): Promise<string> {
+  async chat(
+    messages: ChatMessage[],
+    options: RequestOptions & { tools?: Tool[] } = {}
+  ): Promise<ChatMessage> {
+    const body: Record<string, unknown> = {
+      model: this.config.model,
+      messages,
+    };
+
+    // Add tools if provided
+    if (options.tools && options.tools.length > 0) {
+      body['tools'] = options.tools;
+    }
+
     const response = await this.postJSON<ChatCompletionResponse>(
       '/chat/completions',
-      {
-        model: this.config.model,
-        messages,
-      },
+      body,
       options.signal,
     );
 
-    const content = response.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') {
-      throw new LLMError('Chat response missing content');
+    const message = response.choices?.[0]?.message;
+    if (!message) {
+      throw new LLMError('Chat response missing message');
     }
-    return content;
+
+    // Return the full message (with tool_calls if present)
+    return {
+      role: 'assistant',
+      content: message.content ?? null,
+      tool_calls: message.tool_calls,
+    };
   }
 
   private async postJSON<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {

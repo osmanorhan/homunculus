@@ -1,4 +1,4 @@
-import { defineOrganicAgent, type OrganicAgent } from '@homunculus-live/core';
+import { defineHomunculusAgent, type HomunculusAgent } from '@homunculus-live/core';
 import type { LLMClient } from '@homunculus-live/semantic-engine';
 
 export interface SignalSocietyPlan {
@@ -22,18 +22,18 @@ export interface SignalSocietyPlannerOptions {
 /**
  * Signal-based society planner: emits JSON plan as a signal.
  */
-export function createSignalSocietyPlanner(options: SignalSocietyPlannerOptions): OrganicAgent {
+export function createSignalSocietyPlanner(options: SignalSocietyPlannerOptions): HomunculusAgent {
   const { llm, maxAgents = 5, debug = false } = options;
   const planned = new Set<string>();
 
-  return defineOrganicAgent({
+  return defineHomunculusAgent({
     id: 'signal-society-planner',
     name: 'Signal Society Planner',
     receptorField: {
       patterns: ['task', 'goal', 'scenario', 'analyzed-intent'],
     },
     systemPrompt: [
-      'You are a society planner that designs organic agents for a signal-based biosphere.',
+      'You are a society planner that designs homunculus agents for a signal-based biosphere.',
       'Given a goal, describe what specialized agents would help achieve it.',
       'For each agent, naturally explain:',
       '- The agent\'s name and role',
@@ -47,6 +47,35 @@ export function createSignalSocietyPlanner(options: SignalSocietyPlannerOptions)
       if (!signal) return;
       const goal = signal.thought.trim();
       if (!goal || planned.has(goal)) return;
+
+      // AMBIENT-AWARE PLANNING THROTTLING
+      // Don't propose new agents if conversation is converging
+      const context = (this as any).getContext?.() || [];
+      const lastContext = context[context.length - 1] || '';
+
+      const ambientMatch = lastContext.match(/DELTA = (\d+)%.*SATURATION = (\d+)%.*\((.*?)\)/);
+      if (ambientMatch) {
+        const delta = parseInt(ambientMatch[1], 10);
+        const saturation = parseInt(ambientMatch[2], 10);
+        const state = ambientMatch[3];
+
+        // Same throttling logic as agent factory
+        const shouldThrottle =
+          saturation > 60 ||
+          delta < 30 ||
+          state === 'CONVERGING' ||
+          state === 'SATURATED' ||
+          state === 'STAGNANT';
+
+        if (shouldThrottle) {
+          if (debug) {
+            // eslint-disable-next-line no-console
+            console.log(`[signal-society-planner] 🛑 PLANNING THROTTLED: Delta=${delta}%, Saturation=${saturation}%, State=${state}`);
+          }
+          return; // Silently skip planning
+        }
+      }
+
       planned.add(goal);
 
       if (debug) {
@@ -76,7 +105,8 @@ export function createSignalSocietyPlanner(options: SignalSocietyPlannerOptions)
         }),
       ].join('\n');
 
-      const response = await llm.chat([{ role: 'user', content: prompt }]);
+      const llmResponse = await llm.chat([{ role: 'user', content: prompt }]);
+      const response = llmResponse.content ?? '';
 
       // Extract JSON from response (might be wrapped in natural language)
       let plan: SignalSocietyPlan | undefined;

@@ -1,6 +1,6 @@
 import type { OrganicSpawner } from './biosphere.js';
 import type { Signal } from '../signal/signal.js';
-import { defineOrganicAgent, type OrganicAgent } from '../signal/organic-agent.js';
+import { defineHomunculusAgent, type HomunculusAgent } from '../signal/homunculus-agent.js';
 import { generateId } from '../utils/id.js';
 import type { AgentFrame } from '../frames/agent-frame.js';
 import { FrameRegistry } from '../frames/frame-registry.js';
@@ -11,12 +11,15 @@ import { applySkillPolicy, type SkillPolicy } from '../skills/skill-policy.js';
 export interface FrameSpawnerContext {
   goal?: string;
   distressSignal?: Signal;
-  existingAgents?: OrganicAgent[];
+  existingAgents?: HomunculusAgent[];
 }
 
 export interface FrameSpawnerOptions {
   llm: {
-    chat(messages: Array<{ role: string; content: string }>): Promise<string>;
+    chat(
+      messages: Array<{ role: string; content: string | null; tool_calls?: any[]; tool_call_id?: string }>,
+      options?: { tools?: any[] }
+    ): Promise<{ role: string; content: string | null; tool_calls?: any[] }>;
   };
   frameRegistry: FrameRegistry;
   skillRegistry?: MotorSkillRegistry;
@@ -59,7 +62,7 @@ export class FrameSpawner implements OrganicSpawner {
     this.fallbackSpawner = options.fallbackSpawner;
   }
 
-  async seedFromGoal(goal: string, existingAgents: OrganicAgent[] = []): Promise<OrganicAgent[]> {
+  async seedFromGoal(goal: string, existingAgents: HomunculusAgent[] = []): Promise<HomunculusAgent[]> {
     const match = await this.frameRegistry.best(goal, { minSimilarity: this.minSimilarity });
     if (!match) {
       return this.fallbackSpawner?.seedFromGoal
@@ -79,8 +82,8 @@ export class FrameSpawner implements OrganicSpawner {
 
   async spawnHelperForDistress(
     distressSignal: Signal,
-    existingAgents: OrganicAgent[] = [],
-  ): Promise<OrganicAgent | null> {
+    existingAgents: HomunculusAgent[] = [],
+  ): Promise<HomunculusAgent | null> {
     const match = await this.frameRegistry.best(distressSignal.thought, { minSimilarity: this.minSimilarity });
     if (!match) {
       return this.fallbackSpawner?.spawnHelperForDistress
@@ -98,7 +101,7 @@ export class FrameSpawner implements OrganicSpawner {
     return agent;
   }
 
-  private async materialize(frame: AgentFrame, context: FrameSpawnerContext): Promise<OrganicAgent | null> {
+  private async materialize(frame: AgentFrame, context: FrameSpawnerContext): Promise<HomunculusAgent | null> {
     if (!this.allowDuplicateFrames && this.hasFrameInstance(frame, context.existingAgents ?? [])) {
       return null;
     }
@@ -117,7 +120,7 @@ export class FrameSpawner implements OrganicSpawner {
       ? motorSkills.map(skill => applySkillPolicy(skill, this.skillPolicy!, { agentId, agentName }))
       : motorSkills;
 
-    return defineOrganicAgent({
+    return defineHomunculusAgent({
       id: agentId,
       name: agentName,
       receptorField: { patterns: frame.receptorPatterns },
@@ -160,7 +163,7 @@ export class FrameSpawner implements OrganicSpawner {
     return resolved;
   }
 
-  private hasFrameInstance(frame: AgentFrame, existingAgents: OrganicAgent[]): boolean {
+  private hasFrameInstance(frame: AgentFrame, existingAgents: HomunculusAgent[]): boolean {
     return existingAgents.some(agent => agent.id === frame.id || agent.name === frame.id);
   }
 }

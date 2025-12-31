@@ -1,9 +1,12 @@
-import { defineOrganicAgent, type OrganicAgent } from '../signal/organic-agent.js';
+import { defineHomunculusAgent, type HomunculusAgent } from '../signal/homunculus-agent.js';
 import type { Signal } from '../signal/signal.js';
 
 interface GenerativeSpawnerConfig {
   llm: {
-    chat(messages: Array<{ role: string; content: string }>): Promise<string>;
+    chat(
+      messages: Array<{ role: string; content: string | null; tool_calls?: any[]; tool_call_id?: string }>,
+      options?: { tools?: any[] }
+    ): Promise<{ role: string; content: string | null; tool_calls?: any[] }>;
   };
   maxAgents?: number;
 }
@@ -23,7 +26,7 @@ interface SeedPlan {
 
 /**
  * GenerativeSpawner asks the LLM what agents are needed and materializes them
- * as OrganicAgents. No hardcoded roles or prompts live here; the LLM invents
+ * as homunculus agents. No hardcoded roles or prompts live here; the LLM invents
  * the society from the scenario/distress itself.
  */
 export class GenerativeSpawner {
@@ -41,7 +44,7 @@ export class GenerativeSpawner {
    * TASK-AGNOSTIC: The LLM discovers what perspectives/roles are needed
    * from the scenario itself, not from hardcoded templates.
    */
-  async seedFromGoal(goal: string, existingAgents: OrganicAgent[] = []): Promise<OrganicAgent[]> {
+  async seedFromGoal(goal: string, existingAgents: HomunculusAgent[] = []): Promise<HomunculusAgent[]> {
     const names = existingAgents.map(a => a.name).join(', ') || 'none';
     const response = await this.llm.chat([
       {
@@ -83,7 +86,7 @@ export class GenerativeSpawner {
       },
     ]);
 
-    const plan = this.parsePlan(response);
+    const plan = this.parsePlan(response.content ?? '');
     const agents = await this.materialize(plan.agents, existingAgents);
     return agents;
   }
@@ -93,8 +96,8 @@ export class GenerativeSpawner {
    */
   async spawnHelperForDistress(
     distressSignal: Signal,
-    existingAgents: OrganicAgent[] = [],
-  ): Promise<OrganicAgent | null> {
+    existingAgents: HomunculusAgent[] = [],
+  ): Promise<HomunculusAgent | null> {
     const response = await this.llm.chat([
       {
         role: 'system',
@@ -126,13 +129,13 @@ export class GenerativeSpawner {
       },
     ]);
 
-    const blueprint = this.parseHelper(response);
+    const blueprint = this.parseHelper(response.content ?? '');
     if (!blueprint) return null;
     const [agent] = await this.materialize([blueprint], existingAgents);
     return agent ?? null;
   }
 
-  private async materialize(blueprints: AgentBlueprint[], existingAgents: OrganicAgent[]): Promise<OrganicAgent[]> {
+  private async materialize(blueprints: AgentBlueprint[], existingAgents: HomunculusAgent[]): Promise<HomunculusAgent[]> {
     const existingIds = new Set(existingAgents.map(a => a.id));
     const existingNames = new Set(existingAgents.map(a => a.name.toLowerCase()));
 
@@ -142,7 +145,7 @@ export class GenerativeSpawner {
       .filter(b => !existingIds.has(b.id) && !existingNames.has(b.name.toLowerCase()))
       .map(bp => {
         const prompt = this.buildVoice(bp);
-        return defineOrganicAgent({
+        return defineHomunculusAgent({
           id: bp.id,
           name: bp.name,
           receptorField: {

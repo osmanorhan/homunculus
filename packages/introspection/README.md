@@ -4,7 +4,7 @@ Phase 3 utilities for planning agent societies and detecting when a society has 
 
 ## Features
 - Signal society planner: emits a JSON plan describing agents to spawn for a given goal.
-- Signal agent factory: materializes organic agents from a plan signal.
+- Signal agent factory: materializes homunculus agents from a plan signal.
 - Equilibrium detector: measures goal tension, momentum, coherence, and decision clarity to decide when thinking has converged.
 
 ## Exports
@@ -44,7 +44,7 @@ for await (const planSignal of planner.emit({
 ### Spawn agents from a plan
 ```ts
 import { createSignalAgentFactory } from '@homunculus-live/introspection';
-import { defineOrganicAgent } from '@homunculus-live/core';
+import { defineHomunculusAgent } from '@homunculus-live/core';
 import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const llm = new LLMClient({
@@ -53,7 +53,7 @@ const llm = new LLMClient({
   model: process.env.LLM_MODEL ?? '',
 });
 
-const birth = (agent: ReturnType<typeof defineOrganicAgent>) => {
+const birth = (agent: ReturnType<typeof defineHomunculusAgent>) => {
   // Register the agent in your biosphere.
   console.log('Born:', agent.id);
 };

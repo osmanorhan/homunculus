@@ -1,21 +1,21 @@
-import { defineOrganicAgent, type OrganicAgent } from '@homunculus-live/core';
+import { defineHomunculusAgent, type HomunculusAgent } from '@homunculus-live/core';
 import type { LLMClient } from '@homunculus-live/semantic-engine';
 import type { SignalSocietyPlan } from './signal-society-planner.js';
 
 export interface SignalAgentFactoryOptions {
   llm: LLMClient;
-  birth: (agent: OrganicAgent) => void;
+  birth: (agent: HomunculusAgent) => void;
   debug?: boolean;
 }
 
 /**
- * Signal-based agent factory: materializes organic agents from a plan signal.
+ * Signal-based agent factory: materializes homunculus agents from a plan signal.
  */
-export function createSignalAgentFactory(options: SignalAgentFactoryOptions): OrganicAgent {
+export function createSignalAgentFactory(options: SignalAgentFactoryOptions): HomunculusAgent {
   const { llm, birth, debug = false } = options;
   const spawned = new Set<string>();
 
-  return defineOrganicAgent({
+  return defineHomunculusAgent({
     id: 'signal-agent-factory',
     name: 'Signal Agent Factory',
     receptorField: {
@@ -35,6 +35,44 @@ export function createSignalAgentFactory(options: SignalAgentFactoryOptions): Or
         console.log('[signal-agent-factory] Processing signal for agent specifications...');
       }
 
+      // AMBIENT-AWARE SPAWN THROTTLING
+      // Check if the ambient directive indicates we're converging/saturated
+      // Logic: When the plane is landing, don't hire a new pilot
+      const context = (this as any).getContext?.() || [];
+      const lastContext = context[context.length - 1] || '';
+
+      // Parse ambient state from context (if present)
+      const ambientMatch = lastContext.match(/DELTA = (\d+)%.*SATURATION = (\d+)%.*\((.*?)\)/);
+      if (ambientMatch) {
+        const delta = parseInt(ambientMatch[1], 10);
+        const saturation = parseInt(ambientMatch[2], 10);
+        const state = ambientMatch[3];
+
+        // SPAWN THROTTLING LOGIC:
+        // Don't spawn if: saturation > 60% OR delta < 30% OR state is CONVERGING/SATURATED/STAGNANT
+        const shouldThrottle =
+          saturation > 60 ||
+          delta < 30 ||
+          state === 'CONVERGING' ||
+          state === 'SATURATED' ||
+          state === 'STAGNANT';
+
+        if (shouldThrottle) {
+          if (debug) {
+            // eslint-disable-next-line no-console
+            console.log(`[signal-agent-factory] 🛑 SPAWN THROTTLED: Delta=${delta}%, Saturation=${saturation}%, State=${state}`);
+            console.log('[signal-agent-factory] Reason: Conversation converging, new agents would slow down conclusion');
+          }
+          yield `I sensed a request to spawn agents, but the conversation is already converging (${state}, Δ=${delta}%, Sat=${saturation}%). Spawning new agents now would slow down conclusion. I'm staying quiet.`;
+          return;
+        }
+
+        if (debug) {
+          // eslint-disable-next-line no-console
+          console.log(`[signal-agent-factory] ✓ SPAWN ALLOWED: Delta=${delta}%, Saturation=${saturation}%, State=${state}`);
+        }
+      }
+
       // Ask LLM to extract plan from the signal (semantic extraction)
       const extractionPrompt = [
         'Extract agent spawn specifications from this signal.',
@@ -51,7 +89,8 @@ export function createSignalAgentFactory(options: SignalAgentFactoryOptions): Or
 
       let planResponse: string;
       try {
-        planResponse = await llm.chat([{ role: 'user', content: extractionPrompt }]);
+        const response = await llm.chat([{ role: 'user', content: extractionPrompt }]);
+        planResponse = response.content ?? '';
       } catch (error) {
         console.error('[signal-agent-factory] LLM call failed:', error);
         yield `I tried to extract agent specifications but the LLM call failed: ${error}`;
@@ -127,7 +166,7 @@ export function createSignalAgentFactory(options: SignalAgentFactoryOptions): Or
             continue;
           }
 
-          const agent = defineOrganicAgent({
+          const agent = defineHomunculusAgent({
             id: spec.id,
             name: spec.name,
             receptorField: {
