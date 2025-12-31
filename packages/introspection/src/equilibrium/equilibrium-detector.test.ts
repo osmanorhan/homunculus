@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { EquilibriumDetector } from './equilibrium-detector.js';
 import type { Signal } from '../../../core/src/signal/signal.js';
-import type { OrganicAgent } from '../../../core/src/signal/organic-agent.js';
+import type { HomunculusAgent } from '../../../core/src/signal/homunculus-agent.js';
 
 // Mock LLM client
 const createMockLLM = () => ({
@@ -33,7 +33,7 @@ const createMockSignal = (thought: string, emittedBy: string, embedding?: number
   pheromone: embedding || Array.from({ length: 8 }, () => Math.random()),
 });
 
-const createMockAgent = (id: string, name: string): OrganicAgent =>
+const createMockAgent = (id: string, name: string): HomunculusAgent =>
   ({
     id,
     name,

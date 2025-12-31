@@ -14,18 +14,18 @@
  */
 
 import type { Signal } from '../signal/signal.js';
-import { defineMetaObserver, defineOrganicAgent, type OrganicAgent } from '../signal/organic-agent.js';
+import { defineMetaObserver, defineHomunculusAgent, type HomunculusAgent } from '../signal/homunculus-agent.js';
 import { createSignal, resonates } from '../signal/signal.js';
 import { cosineSimilarity } from '../signal/semantic-utils.js';
 import { createSignalSynapse, type SignalSynapse } from '../synapse/signal-synapse.js';
 import type { BiosphereEnvironment, EnvironmentSignal } from './environment.js';
 export interface OrganicSpawner {
-  seedFromGoal?(goal: string, existingAgents?: OrganicAgent[]): Promise<OrganicAgent[]>;
-  spawnHelperForDistress(distressSignal: Signal, existingAgents?: OrganicAgent[]): Promise<OrganicAgent | null>;
+  seedFromGoal?(goal: string, existingAgents?: HomunculusAgent[]): Promise<HomunculusAgent[]>;
+  spawnHelperForDistress(distressSignal: Signal, existingAgents?: HomunculusAgent[]): Promise<HomunculusAgent | null>;
   spawnBridgeAgent?(
     spec: BridgeAgentSpec,
-    context: { signal: Signal; source: OrganicAgent; target: OrganicAgent; existingAgents: OrganicAgent[] },
-  ): Promise<OrganicAgent | null>;
+    context: { signal: Signal; source: HomunculusAgent; target: HomunculusAgent; existingAgents: HomunculusAgent[] },
+  ): Promise<HomunculusAgent | null>;
 }
 
 export interface BridgeAgentSpec {
@@ -49,11 +49,14 @@ export interface BiosphereConfig {
    */
   llm: {
     embed(text: string): Promise<number[]>;
-    chat(messages: Array<{ role: string; content: string }>): Promise<string>;
+    chat(
+      messages: Array<{ role: string; content: string | null; tool_calls?: any[]; tool_call_id?: string }>,
+      options?: { tools?: any[] }
+    ): Promise<{ role: string; content: string | null; tool_calls?: any[] }>;
   };
 
   /**
-   * Agent spawner for organic agent creation
+   * Agent spawner for homunculus agent creation
    */
   spawner?: OrganicSpawner;
 
@@ -99,15 +102,15 @@ export interface BiosphereConfig {
 }
 
 export interface BiosphereObserver {
-  onAgentBorn?(agent: OrganicAgent, tick: number): void;
+  onAgentBorn?(agent: HomunculusAgent, tick: number): void;
   onSignalEmitted?(signal: Signal, tick: number): void;
-  onSignalRouted?(signal: Signal, receivers: OrganicAgent[], tick: number): void;
-  onAgentSpawned?(agent: OrganicAgent, trigger: Signal, tick: number): void;
+  onSignalRouted?(signal: Signal, receivers: HomunculusAgent[], tick: number): void;
+  onAgentSpawned?(agent: HomunculusAgent, trigger: Signal, tick: number): void;
 }
 
 export interface BiosphereState {
   tick: number;
-  agents: Map<string, OrganicAgent>;
+  agents: Map<string, HomunculusAgent>;
   signals: Signal[];
   receptorFieldCache: Map<string, number[]>;
   equilibrium?: {
@@ -116,6 +119,7 @@ export interface BiosphereState {
     momentum: number;
     coherence: number;
     decisionClarity: number;
+    semanticSaturation: number;
     reasoning: string;
   };
 }
@@ -127,10 +131,10 @@ export interface BiosphereState {
  * - Agents emit natural language thoughts
  * - Biosphere embeds thoughts into vectors (pheromones)
  * - Routes via semantic similarity (cosine distance)
- * - Spawns agents organically in response to distress
+ * - Spawns agents dynamically in response to distress
  */
 export class Biosphere {
-  private readonly agents = new Map<string, OrganicAgent>();
+  private readonly agents = new Map<string, HomunculusAgent>();
   private readonly signalHistory: Signal[] = [];
   private readonly receptorFieldCache = new Map<string, number[]>();
   private readonly synapses = new Map<string, SignalSynapse>(); // Synaptic connections
@@ -163,7 +167,7 @@ export class Biosphere {
   /**
    * Birth an agent into the biosphere
    */
-  async birth(agent: OrganicAgent): Promise<void> {
+  async birth(agent: HomunculusAgent): Promise<void> {
     this.agents.set(agent.id, agent);
 
     // Pre-compute receptor field embedding
@@ -196,7 +200,27 @@ export class Biosphere {
         await this.emitEnvironmentSignals();
       }
 
+      // Check equilibrium BEFORE agents emit (to inject ambient state)
+      let equilibriumState;
+      if (this.equilibriumConfig?.enabled && this.equilibriumConfig.detector && this.equilibriumConfig.scenario) {
+        equilibriumState = await this.equilibriumConfig.detector.detect(
+          this.equilibriumConfig.scenario,
+          this.signalHistory,
+          Array.from(this.agents.values()),
+        );
+
+        // INJECT AMBIENT STATE into all agents before they emit
+        if (equilibriumState?.ambientDirective) {
+          for (const agent of this.agents.values()) {
+            if (agent.injectAmbient) {
+              agent.injectAmbient(equilibriumState.ambientDirective);
+            }
+          }
+        }
+      }
+
       // Let all agents emit their thoughts (in parallel for speed)
+      // They now have ambient awareness of conversation state
       const emitPromises: Promise<void>[] = [];
 
       for (const agent of this.agents.values()) {
@@ -213,17 +237,7 @@ export class Biosphere {
 
       console.log(`Tick ${this.tick} complete: ${this.signalHistory.length} total signals`);
 
-      // Check equilibrium if enabled
-      let equilibriumState;
-      if (this.equilibriumConfig?.enabled && this.equilibriumConfig.detector && this.equilibriumConfig.scenario) {
-        equilibriumState = await this.equilibriumConfig.detector.detect(
-          this.equilibriumConfig.scenario,
-          this.signalHistory,
-          Array.from(this.agents.values()),
-        );
-      }
-
-      // Emit state
+      // Emit state (equilibrium already calculated before emit for ambient injection)
       yield this.getState(equilibriumState);
 
       // Detect and intervene on stagnation
@@ -268,7 +282,7 @@ export class Biosphere {
   /**
    * Propagate a thought through the semantic space
    */
-  private async propagate(thought: string, source: OrganicAgent): Promise<void> {
+  private async propagate(thought: string, source: HomunculusAgent): Promise<void> {
     await this.flushBirthQueue();
 
     // 1. Convert thought to pheromone (embedding)
@@ -371,8 +385,8 @@ export class Biosphere {
    */
   private async propagateToReceiver(
     signal: Signal,
-    source: OrganicAgent,
-    receiver: OrganicAgent,
+    source: HomunculusAgent,
+    receiver: HomunculusAgent,
   ): Promise<void> {
     // Calculate semantic similarity
     const receiverVector = this.receptorFieldCache.get(receiver.id);
@@ -407,8 +421,8 @@ export class Biosphere {
    * Get existing synapse or create new one
    */
   private async getOrCreateSynapse(
-    from: OrganicAgent,
-    to: OrganicAgent,
+    from: HomunculusAgent,
+    to: HomunculusAgent,
     similarity: number,
   ): Promise<SignalSynapse> {
     const synapseId = `${from.id}→${to.id}`;
@@ -439,8 +453,8 @@ export class Biosphere {
   /**
    * Find agents that resonate with this signal
    */
-  private async findResonance(signal: Signal): Promise<OrganicAgent[]> {
-    let receivers: OrganicAgent[] = [];
+  private async findResonance(signal: Signal): Promise<HomunculusAgent[]> {
+    let receivers: HomunculusAgent[] = [];
 
     for (const agent of this.agents.values()) {
       // Skip self
@@ -465,7 +479,7 @@ export class Biosphere {
     if (receivers.length === 0) {
       const ambientThreshold = 0.4; // Lower than default 0.6
       const maxAmbientReceivers = 3; // Limit to prevent exponential feedback
-      const candidates: Array<{ agent: OrganicAgent; similarity: number }> = [];
+      const candidates: Array<{ agent: HomunculusAgent; similarity: number }> = [];
 
       for (const agent of this.agents.values()) {
         if (agent.id === signal.emittedBy) continue;
@@ -606,7 +620,7 @@ export class Biosphere {
   /**
    * Get all agents
    */
-  getAgents(): Map<string, OrganicAgent> {
+  getAgents(): Map<string, HomunculusAgent> {
     return new Map(this.agents);
   }
 
@@ -651,14 +665,14 @@ export class Biosphere {
     await Promise.all(tasks);
   }
 
-  private listAgents(): OrganicAgent[] {
+  private listAgents(): HomunculusAgent[] {
     return Array.from(this.agents.values());
   }
 
-  private async findSimilar(name: string): Promise<OrganicAgent | undefined> {
+  private async findSimilar(name: string): Promise<HomunculusAgent | undefined> {
     const targetVector = await this.llm.embed(name);
 
-    let bestMatch: OrganicAgent | undefined;
+    let bestMatch: HomunculusAgent | undefined;
     let bestSimilarity = 0;
 
     for (const agent of this.listAgents()) {
@@ -690,8 +704,8 @@ export class Biosphere {
    */
   private async spawnBridgeAgent(
     signal: Signal,
-    source: OrganicAgent,
-    target: OrganicAgent,
+    source: HomunculusAgent,
+    target: HomunculusAgent,
     similarity: number,
   ): Promise<void> {
     if (!this.spawner) {
@@ -710,7 +724,7 @@ export class Biosphere {
     console.log(`═══════════════════════════════════════════════════════\n`);
 
     // Ask LLM what intermediate perspective would bridge the gap
-    const bridgeSpec = await this.llm.chat([
+    const bridgeResponse = await this.llm.chat([
       {
         role: 'system',
         content: [
@@ -766,6 +780,7 @@ export class Biosphere {
 
     // Parse bridge spec
     try {
+      const bridgeSpec = bridgeResponse.content ?? '';
       const extracted = bridgeSpec.match(/```json\s*([\s\S]*?)\s*```/i)?.[1] || bridgeSpec;
       const parsed = JSON.parse(extracted) as { agent: BridgeAgentSpec };
       const blueprint = parsed.agent;
@@ -789,7 +804,7 @@ export class Biosphere {
             target,
             existingAgents: this.listAgents(),
           })
-        : defineOrganicAgent({
+        : defineHomunculusAgent({
             id: blueprint.id,
             name: blueprint.name,
             receptorField: {

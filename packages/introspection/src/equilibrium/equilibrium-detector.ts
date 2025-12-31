@@ -20,9 +20,8 @@
  * THIS IS NOT KEYWORD MATCHING - IT'S SEMANTIC TENSION MEASUREMENT
  */
 
-import type { Signal } from '../../../core/src/signal/signal.js';
-import type { OrganicAgent } from '../../../core/src/signal/organic-agent.js';
-import { cosineSimilarity } from '../../../core/src/signal/semantic-utils.js';
+import type { Signal, HomunculusAgent } from '@homunculus-live/core';
+import { cosineSimilarity } from '@homunculus-live/core';
 
 export interface EquilibriumState {
   /**
@@ -55,6 +54,19 @@ export interface EquilibriumState {
   decisionClarity: number;
 
   /**
+   * Semantic saturation: are agents repeating themselves? (0-1)
+   * 0 = exploring new ideas, 1 = stuck in semantic loop
+   *
+   * SCIENTIFIC FOUNDATION (Information Theory + Signal Processing):
+   * - Shannon entropy: Measures information diversity in signal space
+   * - Self-similarity matrix: Detects temporal recurrence patterns
+   * - Combined score: saturation = 0.5·(1-entropy) + 0.5·repetition
+   *
+   * High saturation indicates agents are semantically exhausted
+   */
+  semanticSaturation: number;
+
+  /**
    * Is the system stagnant? (stuck in a loop with no progress)
    * True if high tension + low coherence for multiple ticks
    */
@@ -64,13 +76,40 @@ export interface EquilibriumState {
    * Explanation of why equilibrium was reached (or not)
    */
   reasoning: string;
+
+  /**
+   * Ambient state directive for agent injection
+   *
+   * This is injected into agent context to give real-time awareness:
+   * >>> AMBIENT STATE: DELTA = 12% ↓, SATURATION = 45% (CONVERGING)
+   * >>> DIRECTIVE: Consensus is forming. Consider summarizing the decision.
+   */
+  ambientDirective: string;
 }
+
+/**
+ * Equilibrium detection mode
+ *
+ * - 'deliberation': Multi-agent consensus (uses all factors: tension, coherence, clarity, momentum)
+ * - 'task-completion': Goal achievement for coding tasks (uses tension + reality-feedback clarity only)
+ */
+export type EquilibriumMode = 'deliberation' | 'task-completion';
 
 export interface EquilibriumDetectorConfig {
   llm: {
     embed(text: string): Promise<number[]>;
-    chat(messages: Array<{ role: string; content: string }>): Promise<string>;
+    chat(
+      messages: Array<{ role: string; content: string | null; tool_calls?: any[]; tool_call_id?: string }>,
+      options?: { tools?: any[] }
+    ): Promise<{ role: string; content: string | null; tool_calls?: any[] }>;
   };
+
+  /**
+   * Detection mode (default: 'deliberation')
+   * - 'deliberation': For multi-agent discussions requiring consensus
+   * - 'task-completion': For coding tasks where goal achievement matters most
+   */
+  mode?: EquilibriumMode;
 
   /**
    * Minimum window of signals to analyze (default: 5)
@@ -106,6 +145,34 @@ export interface EquilibriumDetectorConfig {
    * Above this = clear decision exists
    */
   clarityThreshold?: number;
+
+  /**
+   * Semantic saturation parameters (Information Theory + Signal Processing)
+   */
+
+  /**
+   * Window size for entropy calculation (default: 20)
+   * Larger window = more stable entropy, slower to detect saturation
+   */
+  saturationEntropyWindow?: number;
+
+  /**
+   * Window size for self-similarity matrix (default: 15)
+   * Larger window = more recurrence patterns detected
+   */
+  saturationSimilarityWindow?: number;
+
+  /**
+   * Cosine similarity threshold for clustering/repetition (default: 0.75)
+   * Higher = stricter definition of "similar"
+   */
+  repetitionSimilarityThreshold?: number;
+
+  /**
+   * Minimum lag for self-similarity detection (default: 3)
+   * Prevents counting adjacent signals as repetition (natural conversation flow)
+   */
+  repetitionMinLag?: number;
 }
 
 /**
@@ -123,12 +190,19 @@ export interface EquilibriumDetectorConfig {
  */
 export class EquilibriumDetector {
   private readonly llm: EquilibriumDetectorConfig['llm'];
+  private readonly mode: EquilibriumMode;
   private readonly minSignalWindow: number;
   private readonly minTicks: number;
   private readonly tensionThreshold: number;
   private readonly momentumThreshold: number;
   private readonly coherenceThreshold: number;
   private readonly clarityThreshold: number;
+
+  // Semantic saturation parameters
+  private readonly saturationEntropyWindow: number;
+  private readonly saturationSimilarityWindow: number;
+  private readonly repetitionSimilarityThreshold: number;
+  private readonly repetitionMinLag: number;
 
   // Cached embeddings
   private readonly idealStateCache = new Map<string, number[]>();
@@ -146,12 +220,19 @@ export class EquilibriumDetector {
 
   constructor(config: EquilibriumDetectorConfig) {
     this.llm = config.llm;
+    this.mode = config.mode ?? 'deliberation';
     this.minSignalWindow = config.minSignalWindow ?? 5;
     this.minTicks = config.minTicks ?? 5;
     this.tensionThreshold = config.tensionThreshold ?? 0.3;
     this.momentumThreshold = config.momentumThreshold ?? 0.2;
     this.coherenceThreshold = config.coherenceThreshold ?? 0.7;
     this.clarityThreshold = config.clarityThreshold ?? 0.6;
+
+    // Semantic saturation defaults
+    this.saturationEntropyWindow = config.saturationEntropyWindow ?? 20;
+    this.saturationSimilarityWindow = config.saturationSimilarityWindow ?? 15;
+    this.repetitionSimilarityThreshold = config.repetitionSimilarityThreshold ?? 0.75;
+    this.repetitionMinLag = config.repetitionMinLag ?? 3;
   }
 
   /**
@@ -171,7 +252,7 @@ export class EquilibriumDetector {
    *
    * This aligns with physical systems: equilibrium = minimum energy state
    */
-  async detect(scenario: string, signals: Signal[], agents: OrganicAgent[]): Promise<EquilibriumState> {
+  async detect(scenario: string, signals: Signal[], agents: HomunculusAgent[]): Promise<EquilibriumState> {
     this.currentTick++;
 
     // Not enough data yet - require both minimum signals AND minimum ticks
@@ -182,8 +263,10 @@ export class EquilibriumDetector {
         momentum: 1.0,
         coherence: 0.0,
         decisionClarity: 0.0,
+        semanticSaturation: 0.0,
         isStagnant: false,
         reasoning: 'Insufficient signal history to detect equilibrium',
+        ambientDirective: '>>> AMBIENT STATE: INITIALIZING\n>>> DIRECTIVE: Begin exploring the problem space.',
       };
     }
 
@@ -195,8 +278,10 @@ export class EquilibriumDetector {
         momentum: 1.0,
         coherence: 0.0,
         decisionClarity: 0.0,
+        semanticSaturation: 0.0,
         isStagnant: false,
         reasoning: `Early dialogue (tick ${this.currentTick}/${this.minTicks}) - allowing agents to deliberate`,
+        ambientDirective: '>>> AMBIENT STATE: EARLY DELIBERATION\n>>> DIRECTIVE: Continue exploring. Consensus not yet required.',
       };
     }
 
@@ -206,26 +291,45 @@ export class EquilibriumDetector {
     // Analyze recent signals (last N)
     const recentSignals = signals.slice(-this.signalWindowSize);
 
-    // Measure four dimensions
+    // Measure five dimensions
     const goalTension = await this.measureGoalTension(idealState, recentSignals);
     const momentum = this.measureMomentum(signals, recentSignals);
     const coherence = await this.measureCoherence(recentSignals);
     const decisionClarity = await this.measureDecisionClarity(recentSignals);
 
+    // NEW: Measure semantic saturation (5th dimension)
+    const saturationMetrics = await this.measureSemanticSaturation(recentSignals);
+    const semanticSaturation = saturationMetrics.saturation;
+
     // Calculate system energy (weighted sum of "disorder")
     // Lower energy = closer to equilibrium
-    const energy = this.calculateEnergy(goalTension, momentum, coherence, decisionClarity);
+    const energy = this.calculateEnergy(goalTension, momentum, coherence, decisionClarity, semanticSaturation);
 
-    // Calculate energy gradient (is system still changing?)
-    const energyGradient = await this.calculateEnergyGradient(signals);
+    // Calculate semantic delta (rate of information change)
+    const deltaMetrics = await this.calculateSemanticDelta(signals);
+    const semanticDelta = deltaMetrics.currentDelta;
+    const deltaTrend = deltaMetrics.trend;
 
-    // EQUILIBRIUM CONDITION:
-    // 1. Energy below threshold (system in low-energy state)
-    // 2. Gradient near zero (system stopped changing)
-    const energyThreshold = 0.35; // Tunable
-    const gradientThreshold = 0.1; // Tunable
+    // EQUILIBRIUM CONDITION (Delta-Based):
+    // Instead of Lyapunov energy gradient (flawed for multi-agent systems),
+    // we use semantic delta to detect when agents stop discovering new information
+    //
+    // High Delta (> 0.3): Agents discovering facts, changing minds → CONTINUE
+    // Low Delta (< 0.15): Agents refining wording, repeating → EQUILIBRIUM
+    // Negative trend + high saturation: Agents looping → HARD STOP
+    //
+    // Combined condition:
+    // - Low semantic delta (agents not saying new things)
+    // - OR high saturation (agents repeating themselves)
+    // - OR low energy (traditional Lyapunov as backup)
 
-    const atEquilibrium = energy < energyThreshold && Math.abs(energyGradient) < gradientThreshold;
+    const deltaThreshold = 0.15; // Low delta = equilibrium
+    const lowDelta = semanticDelta < deltaThreshold;
+    const highSaturation = semanticSaturation > 0.6;
+    const lowEnergy = energy < 0.3;
+
+    // Equilibrium when: low delta OR (high saturation AND not discovering)
+    const atEquilibrium = lowDelta || (highSaturation && deltaTrend !== 'increasing') || lowEnergy;
 
     // Track stagnation: high tension + low coherence + low clarity for multiple ticks
     this.stagnationHistory.push({
@@ -249,9 +353,19 @@ export class EquilibriumDetector {
       coherence,
       decisionClarity,
       energy,
-      energyGradient,
+      semanticDelta,
+      deltaTrend,
       atEquilibrium,
       isStagnant,
+    );
+
+    // Format ambient directive for agent injection
+    const ambientDirective = this.formatAmbientDirective(
+      semanticDelta,
+      deltaTrend,
+      semanticSaturation,
+      goalTension,
+      coherence,
     );
 
     return {
@@ -260,8 +374,10 @@ export class EquilibriumDetector {
       momentum,
       coherence,
       decisionClarity,
+      semanticSaturation,
       isStagnant,
       reasoning,
+      ambientDirective,
     };
   }
 
@@ -272,58 +388,132 @@ export class EquilibriumDetector {
    * - Energy function V(x) that decreases over time
    * - Equilibrium when dV/dt ≈ 0
    *
-   * Our energy function:
-   * E = 0.4·tension + 0.1·momentum + 0.3·(1-coherence) + 0.2·(1-clarity)
+   * MODE-AWARE ENERGY FUNCTIONS:
    *
-   * Weights reflect importance:
-   * - Goal tension (0.4): Most important - is the problem solved?
-   * - Coherence (0.3): Second - do agents agree?
-   * - Clarity (0.2): Third - is decision clear?
+   * DELIBERATION MODE (5 dimensions):
+   * E = 0.3·tension + 0.1·momentum + 0.2·(1-coherence) + 0.2·(1-clarity) + 0.2·saturation
+   * - Goal tension (0.3): Most important - is the problem solved?
+   * - Coherence (0.2): Do agents agree?
+   * - Clarity (0.2): Is decision clear?
+   * - Saturation (0.2): Are agents repeating themselves?
    * - Momentum (0.1): Least - agents can be active at equilibrium
+   *
+   * TASK-COMPLETION MODE (3 dimensions):
+   * E = 0.6·tension + 0.2·(1-clarity) + 0.2·saturation
+   * - Goal tension (0.6): PRIMARY - is the task done?
+   * - Clarity (0.2): SECONDARY - are tool results clear?
+   * - Saturation (0.2): Are agents repeating?
+   * - Ignore momentum/coherence - agents can keep talking/disagreeing after task is done
    */
-  private calculateEnergy(tension: number, momentum: number, coherence: number, clarity: number): number {
-    const w_tension = 0.4;
-    const w_momentum = 0.1;
-    const w_coherence = 0.3;
-    const w_clarity = 0.2;
+  private calculateEnergy(
+    tension: number,
+    momentum: number,
+    coherence: number,
+    clarity: number,
+    saturation: number,
+  ): number {
+    if (this.mode === 'task-completion') {
+      // CODING TASK MODE: tension + clarity + saturation matter
+      const w_tension = 0.6;
+      const w_clarity = 0.2;
+      const w_saturation = 0.2;
 
-    const energy =
-      w_tension * tension + w_momentum * momentum + w_coherence * (1 - coherence) + w_clarity * (1 - clarity);
+      const energy = w_tension * tension + w_clarity * (1 - clarity) + w_saturation * saturation;
+      return Math.max(0, Math.min(1, energy));
+    } else {
+      // DELIBERATION MODE: All 5 factors matter
+      const w_tension = 0.3;
+      const w_momentum = 0.1;
+      const w_coherence = 0.2;
+      const w_clarity = 0.2;
+      const w_saturation = 0.2;
 
-    return Math.max(0, Math.min(1, energy));
+      const energy =
+        w_tension * tension +
+        w_momentum * momentum +
+        w_coherence * (1 - coherence) +
+        w_clarity * (1 - clarity) +
+        w_saturation * saturation;
+
+      return Math.max(0, Math.min(1, energy));
+    }
   }
 
   /**
-   * Calculate energy gradient (rate of change)
+   * Calculate semantic delta: rate of information change between consecutive signals
    *
-   * OPTIMIZATION THEORY: Gradient descent converges when ∇E ≈ 0
+   * INFORMATION DYNAMICS (Not Lyapunov!):
+   * - High Delta (> 0.3): Agents discovering new facts, changing minds → CONTINUE
+   * - Low Delta (< 0.15): Agents refining wording, repeating → EQUILIBRIUM
+   * - Zero/Negative Delta: Agents looping, stuck → HARD STOP
    *
-   * We approximate gradient by comparing energy of recent signals to earlier signals:
-   * gradient ≈ (E_recent - E_previous) / Δt
+   * METHOD:
+   * 1. Calculate pairwise dissimilarity (1 - similarity) between consecutive signals
+   * 2. Average the deltas over recent window
+   * 3. Compare to previous window to detect trend
    *
-   * Positive gradient = energy increasing (diverging)
-   * Negative gradient = energy decreasing (converging)
-   * Zero gradient = energy stable (equilibrium)
+   * This captures: Are agents saying NEW things or just rephrasing?
    */
-  private async calculateEnergyGradient(signals: Signal[]): Promise<number> {
-    if (signals.length < this.minSignalWindow * 2) return 1.0; // Not enough data
+  private async calculateSemanticDelta(signals: Signal[]): Promise<{
+    currentDelta: number;
+    deltaRage: number;
+    trend: 'increasing' | 'decreasing' | 'stable';
+  }> {
+    if (signals.length < this.minSignalWindow) {
+      return { currentDelta: 1.0, deltaRage: 0, trend: 'stable' };
+    }
 
-    const windowSize = Math.floor(signals.length / 3);
+    // Split into recent and previous windows
+    const windowSize = Math.min(10, Math.floor(signals.length / 2));
     const recentSignals = signals.slice(-windowSize);
     const previousSignals = signals.slice(-windowSize * 2, -windowSize);
 
-    // Calculate coherence for both windows
-    const recentCoherence = await this.measureCoherence(recentSignals);
-    const previousCoherence = await this.measureCoherence(previousSignals);
+    // Calculate average delta in recent window
+    const recentDelta = this.measureWindowDelta(recentSignals);
 
-    // Approximate energy change (using coherence as proxy)
-    // Higher coherence = lower energy
-    const energyRecent = 1 - recentCoherence;
-    const energyPrevious = 1 - previousCoherence;
+    // Calculate average delta in previous window
+    const previousDelta =
+      previousSignals.length >= 2 ? this.measureWindowDelta(previousSignals) : recentDelta;
 
-    const gradient = (energyRecent - energyPrevious) / windowSize;
+    // Delta rate: how fast is delta changing?
+    const deltaRage = recentDelta - previousDelta;
 
-    return gradient;
+    // Trend
+    let trend: 'increasing' | 'decreasing' | 'stable' = 'stable';
+    if (deltaRage > 0.05) trend = 'increasing';
+    else if (deltaRage < -0.05) trend = 'decreasing';
+
+    return { currentDelta: recentDelta, deltaRage, trend };
+  }
+
+  /**
+   * Measure average semantic delta (dissimilarity) in a window of signals
+   *
+   * Compares consecutive pairs: signal[i] vs signal[i+1]
+   * Returns average dissimilarity (1 - similarity)
+   */
+  private measureWindowDelta(signals: Signal[]): number {
+    if (signals.length < 2) return 1.0;
+
+    let totalDelta = 0;
+    let pairCount = 0;
+
+    for (let i = 0; i < signals.length - 1; i++) {
+      const phero1 = signals[i]?.pheromone;
+      const phero2 = signals[i + 1]?.pheromone;
+
+      if (!phero1 || !phero2 || phero1.length === 0 || phero2.length === 0) {
+        continue;
+      }
+
+      const similarity = cosineSimilarity(phero1, phero2);
+      const delta = 1 - similarity; // Dissimilarity
+
+      totalDelta += delta;
+      pairCount++;
+    }
+
+    return pairCount > 0 ? totalDelta / pairCount : 1.0;
   }
 
   /**
@@ -361,11 +551,13 @@ export class EquilibriumDetector {
       },
     ]);
 
+    const idealState = response.content ?? scenario;
+
     // Cache the embedding
-    const embedding = await this.llm.embed(response);
+    const embedding = await this.llm.embed(idealState);
     this.idealStateCache.set(scenario, embedding);
 
-    return response;
+    return idealState;
   }
 
   /**
@@ -388,8 +580,21 @@ export class EquilibriumDetector {
     const idealEmbedding = await this.llm.embed(idealState);
 
     // Combine recent signals into current state representation
-    const currentStateText = recentSignals.map(s => s.thought).join(' ');
-    const currentEmbedding = await this.llm.embed(currentStateText);
+    // CRITICAL: Limit length to prevent context overflow in embedding model
+    // Use only last few signals and truncate each to reasonable length
+    const maxSignalsToEmbed = 5;
+    const maxCharsPerSignal = 200;
+    const relevantSignals = recentSignals
+      .slice(-maxSignalsToEmbed)
+      .map(s => s.thought.substring(0, maxCharsPerSignal));
+
+    const currentStateText = relevantSignals.join(' ');
+
+    // Additional safety: truncate combined text if still too long
+    const maxTotalChars = 1000; // Safe limit for most embedding models
+    const safeText = currentStateText.substring(0, maxTotalChars);
+
+    const currentEmbedding = await this.llm.embed(safeText);
 
     // Calculate semantic distance (1 - similarity)
     const similarity = cosineSimilarity(idealEmbedding, currentEmbedding);
@@ -474,19 +679,81 @@ export class EquilibriumDetector {
    * Measure decision clarity: is there a crystallized conclusion?
    *
    * METHOD:
-   * 1. Check for decision/conclusion signals semantically
-   * 2. Measure confidence/clarity of those signals
-   * 3. High clarity = decision has crystallized
+   * 1. Check for reality-feedback signals (tool results) - STRONGEST clarity
+   * 2. Check for decision/conclusion signals semantically
+   * 3. Measure confidence/clarity of those signals
+   * 4. High clarity = decision has crystallized
+   *
+   * ENHANCEMENT: Tool execution results are the STRONGEST clarity signal
+   * Reality-feedback signals (from tool execution) indicate concrete outcomes,
+   * not agent hallucinations. These get a clarity boost.
    *
    * SEMANTIC ANCHORS (not keyword matching!):
-   * - "We have decided to X"
-   * - "The conclusion is Y"
-   * - "Therefore we will Z"
+   * - Success: "Task completed successfully", "Files created and saved"
+   * - Decision: "We have decided to X", "The conclusion is Y"
    */
   private async measureDecisionClarity(recentSignals: Signal[]): Promise<number> {
     if (recentSignals.length === 0) return 0.0;
 
-    // Decision/conclusion semantic anchors
+    // ENHANCEMENT: Tool execution results provide strongest clarity
+    // Filter for reality-feedback signals (tool results)
+    const realitySignals = recentSignals.filter(
+      s => s.inferredIntent === 'REALITY_FEEDBACK' || s.inferredTags?.includes('tool-result'),
+    );
+
+    if (realitySignals.length > 0) {
+      // Success pattern anchors for tool results
+      const successAnchors = [
+        'Task completed successfully without errors',
+        'Files created and saved to disk',
+        'Command executed with exit code zero',
+        'Installation completed successfully',
+        'Tests passing with no failures',
+        'Application built and ready to run',
+      ];
+
+      // Failure pattern anchors - these indicate work is NOT complete
+      const failureAnchors = [
+        'Command failed with non-zero exit code',
+        'Error occurred during execution',
+        'Installation failed with errors',
+        'Tests failed with errors',
+        'Build process encountered errors',
+        'Operation completed with exit code 1',
+      ];
+
+      const successEmbeddings = await Promise.all(successAnchors.map(a => this.llm.embed(a)));
+      const failureEmbeddings = await Promise.all(failureAnchors.map(a => this.llm.embed(a)));
+
+      let maxSuccessClarity = 0;
+      let maxFailureClarity = 0;
+
+      for (const signal of realitySignals) {
+        // Check success patterns
+        for (const anchorEmb of successEmbeddings) {
+          const similarity = cosineSimilarity(signal.pheromone, anchorEmb);
+          maxSuccessClarity = Math.max(maxSuccessClarity, similarity);
+        }
+
+        // Check failure patterns
+        for (const anchorEmb of failureEmbeddings) {
+          const similarity = cosineSimilarity(signal.pheromone, anchorEmb);
+          maxFailureClarity = Math.max(maxFailureClarity, similarity);
+        }
+      }
+
+      // If we detect strong failure signals, return LOW clarity (task not complete)
+      // This prevents equilibrium when commands are failing
+      if (maxFailureClarity > 0.5) {
+        return Math.max(0, maxSuccessClarity - maxFailureClarity * 0.8);
+      }
+
+      // Boost reality-feedback clarity by 1.5x (but cap at 1.0)
+      // Tool results are trusted reality, not agent thoughts
+      return Math.min(1.0, maxSuccessClarity * 1.5);
+    }
+
+    // Fallback: Check for decision/conclusion signals
     const decisionAnchors = [
       'We have made a final decision and will proceed with this course of action',
       'The conclusion is clear and we agree on the path forward',
@@ -494,12 +761,9 @@ export class EquilibriumDetector {
       'The plan is settled and we know exactly what to do next',
     ];
 
-    // Embed anchors
     const anchorEmbeddings = await Promise.all(decisionAnchors.map(a => this.llm.embed(a)));
 
-    // Find max similarity between recent signals and decision anchors
     let maxClarity = 0;
-
     for (const signal of recentSignals) {
       for (const anchorEmb of anchorEmbeddings) {
         const similarity = cosineSimilarity(signal.pheromone, anchorEmb);
@@ -545,30 +809,340 @@ export class EquilibriumDetector {
     coherence: number,
     clarity: number,
     energy: number,
-    gradient: number,
+    semanticDelta: number,
+    deltaTrend: 'increasing' | 'decreasing' | 'stable',
     atEquilibrium: boolean,
     isStagnant: boolean,
   ): string {
     const stagnantMarker = isStagnant ? ' ⚠️ STAGNANT' : '';
+    const trendArrow = deltaTrend === 'increasing' ? '↑' : deltaTrend === 'decreasing' ? '↓' : '→';
 
     if (atEquilibrium) {
-      return [
-        `Equilibrium: E=${(energy * 100).toFixed(0)}% (min), ∇E=${gradient.toFixed(3)} (stable)`,
-        `[Tension: ${(tension * 100).toFixed(0)}%`,
-        `Coherence: ${(coherence * 100).toFixed(0)}%`,
-        `Clarity: ${(clarity * 100).toFixed(0)}%]`,
-      ].join(' ');
-    } else {
-      const primaryIssue =
-        Math.abs(gradient) >= 0.1 ? 'system converging' : energy >= 0.35 ? 'energy too high' : 'stabilizing';
+      // Determine why equilibrium was reached
+      const reason =
+        semanticDelta < 0.15
+          ? 'low delta (agents converged)'
+          : coherence > 0.7
+            ? 'high coherence'
+            : 'energy minimum';
 
       return [
-        `${primaryIssue}: E=${(energy * 100).toFixed(0)}%, ∇E=${gradient.toFixed(3)}${stagnantMarker}`,
+        `Equilibrium: ${reason}`,
+        `Δ=${(semanticDelta * 100).toFixed(0)}%${trendArrow}`,
+        `E=${(energy * 100).toFixed(0)}%`,
+        `[T:${(tension * 100).toFixed(0)}%`,
+        `C:${(coherence * 100).toFixed(0)}%`,
+        `Cl:${(clarity * 100).toFixed(0)}%]`,
+      ].join(' ');
+    } else {
+      // Determine what's preventing equilibrium
+      const primaryIssue =
+        semanticDelta > 0.3
+          ? 'high delta (discovering)'
+          : deltaTrend === 'increasing'
+            ? 'delta rising (exploring)'
+            : tension > 0.5
+              ? 'high tension'
+              : 'converging';
+
+      return [
+        `${primaryIssue}${stagnantMarker}`,
+        `Δ=${(semanticDelta * 100).toFixed(0)}%${trendArrow}`,
+        `E=${(energy * 100).toFixed(0)}%`,
         `[T:${(tension * 100).toFixed(0)}%`,
         `M:${(momentum * 100).toFixed(0)}%`,
         `C:${(coherence * 100).toFixed(0)}%`,
         `Cl:${(clarity * 100).toFixed(0)}%]`,
       ].join(' ');
     }
+  }
+
+  /**
+   * Format ambient state directive for agent injection
+   *
+   * This creates the [BIOSPHERE_INJECTION] message that agents receive
+   * to gain awareness of the conversation state.
+   *
+   * Format inspired by user request:
+   * >>> AMBIENT STATE: SATURATION = 95% (STAGNANT)
+   * >>> DIRECTIVE: The Council is looping. Do not propose new ideas. Call for a Vote or Synthesize the Plan.
+   */
+  formatAmbientDirective(
+    semanticDelta: number,
+    deltaTrend: 'increasing' | 'decreasing' | 'stable',
+    semanticSaturation: number,
+    goalTension: number,
+    coherence: number,
+  ): string {
+    const deltaPercent = (semanticDelta * 100).toFixed(0);
+    const saturationPercent = (semanticSaturation * 100).toFixed(0);
+    const trendArrow = deltaTrend === 'increasing' ? '↑' : deltaTrend === 'decreasing' ? '↓' : '→';
+
+    // Determine state label
+    let stateLabel = 'ACTIVE';
+    if (semanticSaturation > 0.75) stateLabel = 'STAGNANT';
+    else if (semanticSaturation > 0.6) stateLabel = 'SATURATED';
+    else if (deltaTrend === 'decreasing' && coherence > 0.7) stateLabel = 'CONVERGING';
+    else if (deltaTrend === 'increasing') stateLabel = 'EXPLORING';
+
+    // Build ambient state line
+    const ambientState = `>>> AMBIENT STATE: DELTA = ${deltaPercent}% ${trendArrow}, SATURATION = ${saturationPercent}% (${stateLabel})`;
+
+    // Build directive based on state
+    let directive = '';
+
+    if (semanticSaturation > 0.75 && deltaTrend !== 'increasing') {
+      // STAGNANT: Agents are looping, need to wrap up
+      directive = '>>> DIRECTIVE: The Council is looping. Do not propose new ideas. Do not spawn agents. You must Call for a Vote or Synthesize the Plan.';
+    } else if (semanticSaturation > 0.6 && semanticDelta < 0.2) {
+      // SATURATED: Agents repeating themselves
+      directive = '>>> DIRECTIVE: You are repeating prior arguments. Do not spawn new agents. Either introduce NEW evidence or move to conclude.';
+    } else if (deltaTrend === 'decreasing' && coherence > 0.7 && goalTension < 0.4) {
+      // CONVERGING: Agreement forming
+      directive = '>>> DIRECTIVE: Consensus is forming. Do not spawn new agents. Consider summarizing the agreed-upon decision.';
+    } else if (semanticDelta > 0.3 && deltaTrend === 'increasing') {
+      // EXPLORING: Active discovery
+      directive = '>>> DIRECTIVE: Active discovery phase. Continue exploring the problem space. Spawn specialized agents if needed.';
+    } else {
+      // NEUTRAL: No special directive
+      directive = '>>> DIRECTIVE: Continue deliberating. Strive for consensus.';
+    }
+
+    return `${ambientState}\n${directive}`;
+  }
+
+  /**
+   * Measure semantic saturation: are agents repeating themselves?
+   *
+   * SCIENTIFIC FOUNDATION:
+   * - Information Theory (Shannon Entropy): Measures information diversity
+   * - Signal Processing (Self-Similarity Matrix): Detects temporal recurrence
+   *
+   * COMBINED APPROACH:
+   * - Entropy: Clusters signals and measures distribution diversity
+   * - Repetition: Detects similar signals separated by time lag
+   * - Saturation = 0.5·(1-entropy) + 0.5·repetition
+   *
+   * High saturation = agents semantically exhausted (broken record)
+   * Low saturation = agents exploring new ideas
+   */
+  private async measureSemanticSaturation(
+    recentSignals: Signal[],
+  ): Promise<{
+    saturation: number;
+    entropy: number;
+    repetition: number;
+  }> {
+    if (recentSignals.length < this.repetitionMinLag + 1) {
+      return { saturation: 0, entropy: 1.0, repetition: 0 };
+    }
+
+    // Measure entropy (information diversity)
+    const entropyMetrics = await this.measureSemanticEntropy(recentSignals, this.saturationEntropyWindow);
+
+    // Measure self-similarity (temporal recurrence)
+    const similarityMetrics = await this.measureSelfSimilarity(
+      recentSignals,
+      this.saturationSimilarityWindow,
+      this.repetitionSimilarityThreshold,
+      this.repetitionMinLag,
+    );
+
+    // Combine: saturation = (1 - entropy) + repetition
+    // Low entropy → high saturation
+    // High repetition → high saturation
+    const entropySaturation = 1 - entropyMetrics.normalizedEntropy;
+    const repetitionSaturation = similarityMetrics.repetitionScore;
+
+    const saturation = entropySaturation * 0.5 + repetitionSaturation * 0.5;
+
+    return {
+      saturation: Math.max(0, Math.min(1, saturation)),
+      entropy: entropyMetrics.normalizedEntropy,
+      repetition: repetitionSaturation,
+    };
+  }
+
+  /**
+   * Measure semantic entropy using clustering-based approach
+   *
+   * SHANNON ENTROPY (Information Theory):
+   * H = -Σ p(i) * log₂(p(i))
+   *
+   * METHOD:
+   * 1. Cluster signal embeddings by similarity (threshold: 0.85)
+   * 2. Calculate probability distribution over clusters
+   * 3. Compute Shannon entropy
+   * 4. Normalize to [0,1]
+   *
+   * High entropy = diverse signals (agents exploring)
+   * Low entropy = clustered signals (agents repeating)
+   */
+  private async measureSemanticEntropy(
+    recentSignals: Signal[],
+    windowSize: number,
+  ): Promise<{
+    entropy: number;
+    normalizedEntropy: number;
+    entropyGradient: number;
+  }> {
+    const window = recentSignals.slice(-windowSize);
+
+    if (window.length < 3) {
+      return { entropy: 1.0, normalizedEntropy: 1.0, entropyGradient: 0 };
+    }
+
+    // Extract pheromones (embeddings)
+    const embeddings = window.map(s => s.pheromone).filter(p => p && p.length > 0);
+
+    if (embeddings.length < 3) {
+      return { entropy: 1.0, normalizedEntropy: 1.0, entropyGradient: 0 };
+    }
+
+    // Cluster by similarity (high threshold = same cluster)
+    const clusters = this.clusterBySimilarity(embeddings, 0.85);
+
+    // Calculate probability distribution
+    const N = embeddings.length;
+    const probs = clusters.map(cluster => cluster.length / N);
+
+    // Shannon entropy
+    let entropy = 0;
+    for (const p of probs) {
+      if (p > 0) {
+        entropy -= p * Math.log2(p);
+      }
+    }
+
+    // Normalize to [0, 1]
+    const maxEntropy = Math.log2(N);
+    const normalizedEntropy = maxEntropy > 0 ? entropy / maxEntropy : 0;
+
+    // Gradient (for now, return 0 - can enhance later if needed)
+    const entropyGradient = 0;
+
+    return { entropy, normalizedEntropy, entropyGradient };
+  }
+
+  /**
+   * Measure self-similarity: detect temporal recurrence in signals
+   *
+   * SIGNAL PROCESSING (Self-Similarity Matrix):
+   * - Build NxN similarity matrix of signals
+   * - Find high-similarity pairs separated by minimum lag
+   * - Repetition score = fraction of repetitive pairs
+   *
+   * METHOD:
+   * 1. For each pair (i, j) where j > i + minLag
+   * 2. Calculate cosine similarity
+   * 3. Count pairs above threshold
+   * 4. Return: count / total_pairs
+   *
+   * High repetition = agents repeating previous statements
+   * Low repetition = each signal is novel
+   */
+  private async measureSelfSimilarity(
+    recentSignals: Signal[],
+    windowSize: number,
+    similarityThreshold: number,
+    minLag: number,
+  ): Promise<{
+    repetitionScore: number;
+    maxRecurrence: number;
+    recurrenceCount: number;
+  }> {
+    const window = recentSignals.slice(-windowSize);
+
+    if (window.length < minLag + 1) {
+      return { repetitionScore: 0, maxRecurrence: 0, recurrenceCount: 0 };
+    }
+
+    // Build self-similarity matrix
+    let recurrenceCount = 0;
+    let maxRecurrence = 0;
+    let totalPairs = 0;
+
+    for (let i = 0; i < window.length; i++) {
+      for (let j = i + minLag; j < window.length; j++) {
+        const phero1 = window[i]?.pheromone;
+        const phero2 = window[j]?.pheromone;
+
+        if (!phero1 || !phero2 || phero1.length === 0 || phero2.length === 0) {
+          continue;
+        }
+
+        const similarity = cosineSimilarity(phero1, phero2);
+
+        maxRecurrence = Math.max(maxRecurrence, similarity);
+
+        if (similarity >= similarityThreshold) {
+          recurrenceCount++;
+        }
+
+        totalPairs++;
+      }
+    }
+
+    const repetitionScore = totalPairs > 0 ? recurrenceCount / totalPairs : 0;
+
+    return { repetitionScore, maxRecurrence, recurrenceCount };
+  }
+
+  /**
+   * Cluster embeddings by cosine similarity
+   *
+   * GREEDY CLUSTERING ALGORITHM:
+   * - For each embedding, check if it's similar to existing cluster centroids
+   * - If yes: add to cluster, update centroid (running average)
+   * - If no: create new cluster
+   *
+   * Returns: Array of clusters (each cluster is array of indices)
+   */
+  private clusterBySimilarity(embeddings: number[][], threshold: number): number[][] {
+    const clusters: number[][] = []; // Each cluster stores indices
+    const centroids: number[][] = [];
+
+    for (let i = 0; i < embeddings.length; i++) {
+      const emb = embeddings[i];
+      if (!emb || emb.length === 0) continue;
+
+      let assigned = false;
+
+      // Try to assign to existing cluster
+      for (let c = 0; c < centroids.length; c++) {
+        const centroid = centroids[c];
+        const cluster = clusters[c];
+        if (!centroid || !cluster) continue;
+
+        const similarity = cosineSimilarity(emb, centroid);
+        if (similarity >= threshold) {
+          cluster.push(i);
+          // Update centroid (running average)
+          centroids[c] = this.updateCentroid(centroid, emb, cluster.length);
+          assigned = true;
+          break;
+        }
+      }
+
+      // Create new cluster
+      if (!assigned) {
+        clusters.push([i]);
+        centroids.push([...emb]);
+      }
+    }
+
+    return clusters;
+  }
+
+  /**
+   * Update cluster centroid using incremental average
+   *
+   * RUNNING AVERAGE:
+   * new_centroid = (old_centroid * (n-1) + new_vector) / n
+   *
+   * This avoids storing all vectors in memory
+   */
+  private updateCentroid(currentCentroid: number[], newVector: number[], clusterSize: number): number[] {
+    return currentCentroid.map((val, i) => (val * (clusterSize - 1) + (newVector[i] ?? 0)) / clusterSize);
   }
 }

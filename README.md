@@ -27,7 +27,7 @@ await biosphere.inject('CEO scenario: launch in 48h, data leak found, $2M ad alr
 for await (const state of biosphere.live()) {
   console.log(`Tick ${state.tick}: ${state.agents.size} agents`);
 
-  // System spawns agents organically when stuck
+  // System spawns agents dynamically when stuck
   if (state.equilibrium?.atEquilibrium) {
     console.log('Goal resolved!');
     break;
@@ -37,7 +37,7 @@ for await (const state of biosphere.live()) {
 
 ## Packages
 
-- `@homunculus-live/core` - Signal (natural language thoughts), OrganicAgent, Biosphere, SignalSynapse, GenerativeSpawner
+- `@homunculus-live/core` - Signal (natural language thoughts), HomunculusAgent, Biosphere, SignalSynapse, GenerativeSpawner
 - `@homunculus-live/semantic-engine` - LLM client (chat/embed)
 - `@homunculus-live/primitives` - SignalIntentAnalyzer
 - `@homunculus-live/introspection` - Signal society planning

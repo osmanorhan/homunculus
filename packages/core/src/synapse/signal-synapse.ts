@@ -1,5 +1,5 @@
 /**
- * SignalSynapse: Adaptive coupling between organic agents
+ * SignalSynapse: Adaptive coupling between homunculus agents
  *
  * Neuroscientific approach:
  * - Synaptic strength grows with Hebbian learning (neurons that fire together, wire together)
@@ -96,7 +96,10 @@ export interface SignalSynapseConfig {
   fromContext: string[];
   toContext: string[];
   llm: {
-    chat(messages: Array<{ role: string; content: string }>): Promise<string>;
+    chat(
+      messages: Array<{ role: string; content: string | null; tool_calls?: any[]; tool_call_id?: string }>,
+      options?: { tools?: any[] }
+    ): Promise<{ role: string; content: string | null; tool_calls?: any[] }>;
   };
 }
 
@@ -171,7 +174,7 @@ export function createSignalSynapse(config: SignalSynapseConfig): SignalSynapse 
 
       // LLM transformation (like neurotransmitter synthesis)
       try {
-        const transformed = await llm.chat([
+        const transformedResponse = await llm.chat([
           {
             role: 'system',
             content: [
@@ -199,6 +202,8 @@ export function createSignalSynapse(config: SignalSynapseConfig): SignalSynapse 
           (strength.conductionTime * (strength.activations - 1) + firingTime) / strength.activations;
         strength.lastFiring = Date.now();
         strength.confidence = calculateConfidence(strength.activations, strength.efficacy);
+
+        const transformed = transformedResponse.content ?? '';
 
         // Store in synaptic memory
         synapticMemory.set(signal.thought, transformed);

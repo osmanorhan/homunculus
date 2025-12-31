@@ -1,6 +1,6 @@
 # @homunculus-live/core
 
-Core primitives for the homunculus biological agent framework: organic agents, signals, synapses, and the biosphere router.
+Core primitives for the homunculus biological agent framework: homunculus agents, signals, synapses, and the biosphere router.
 
 ## Install
 ```bash
@@ -9,7 +9,7 @@ pnpm add @homunculus-live/core
 
 ## Quick start
 ```ts
-import { Biosphere, defineOrganicAgent } from '@homunculus-live/core';
+import { Biosphere, defineHomunculusAgent } from '@homunculus-live/core';
 import { LLMClient } from '@homunculus-live/semantic-engine';
 
 const llm = new LLMClient({
@@ -20,7 +20,7 @@ const llm = new LLMClient({
 
 const biosphere = new Biosphere({ llm });
 
-const producer = defineOrganicAgent({
+const producer = defineHomunculusAgent({
   id: 'producer',
   name: 'DataProducer',
   receptorField: {
@@ -34,7 +34,7 @@ const producer = defineOrganicAgent({
   },
 });
 
-const consumer = defineOrganicAgent({
+const consumer = defineHomunculusAgent({
   id: 'consumer',
   name: 'DataConsumer',
   receptorField: {
@@ -58,13 +58,13 @@ for await (const state of biosphere.live()) {
 
 ## Key ideas
 - **Signal**: Natural language thought + `pheromone` embedding for routing.
-- **OrganicAgent**: Perceives signals and emits thoughts via LLM.
+- **HomunculusAgent**: Perceives signals and emits thoughts via LLM.
 - **ReceptorField**: Natural language patterns an agent resonates with.
 - **SignalSynapse**: Adaptive coupling that transforms signals across vocabularies.
 - **Biosphere**: Embeds thoughts, routes via semantic resonance, and can spawn helpers.
 
 ## Exports
-- `Biosphere`, `OrganicAgent`, `defineOrganicAgent`, `defineMetaObserver`
+- `Biosphere`, `HomunculusAgent`, `defineHomunculusAgent`, `defineMetaObserver`
 - `Signal`, `ReceptorField`, `createSignal`, `resonates`
 - `SignalSynapse`, `createSignalSynapse`, `SynapticStrength`
 

@@ -1,4 +1,4 @@
-import { defineOrganicAgent, type OrganicAgent } from '@homunculus-live/core';
+import { defineHomunculusAgent, type HomunculusAgent } from '@homunculus-live/core';
 import type { LLMClient } from '@homunculus-live/semantic-engine';
 
 export interface SignalIntentAnalysis {
@@ -16,11 +16,11 @@ export interface SignalIntentAnalyzerOptions {
 /**
  * Signal-based intent analyzer: consumes raw signals (thought text) and emits a clarified intent signal.
  */
-export function createSignalIntentAnalyzer(options: SignalIntentAnalyzerOptions): OrganicAgent {
+export function createSignalIntentAnalyzer(options: SignalIntentAnalyzerOptions): HomunculusAgent {
   const { llm, debug = false } = options;
   const analyzed = new Set<string>();
 
-  return defineOrganicAgent({
+  return defineHomunculusAgent({
     id: 'signal-intent-analyzer',
     name: 'Signal Intent Analyzer',
     receptorField: {
@@ -57,7 +57,7 @@ export function createSignalIntentAnalyzer(options: SignalIntentAnalyzerOptions)
       ]);
 
       // Emit the LLM's natural language analysis directly
-      yield response.trim();
+      yield (response.content ?? '').trim();
     },
     llm,
   });
